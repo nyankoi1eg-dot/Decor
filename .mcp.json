@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "google-analytics": {
+      "command": "bash",
+      "args": ["-c", "exec \"${CLAUDE_PROJECT_DIR:-$PWD}/.claude/mcp/ga4-launch.sh\""],
+      "env": {
+        "GA_MCP_TELEMETRY": "false"
+      }
+    }
+  }
+}

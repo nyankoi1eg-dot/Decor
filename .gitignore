@@ -1,0 +1,11 @@
+# Claves de servicio de Google: nunca deben entrar al repositorio.
+# Llegan como variable de entorno del entorno remoto y se materializan
+# en /tmp en el arranque (ver .claude/mcp/ga4-launch.sh).
+*service-account*.json
+*-key.json
+credentials.json
+gha-creds-*.json
+.ga4/
+.env
+.env.*
+!.env.example
