@@ -26,16 +26,26 @@ entorno remoto, y `.claude/mcp/ga4-launch.sh` existe para resolverlos:
 
 ## Puesta en marcha
 
-### 1. En Google Cloud (una vez)
+### 1. En Google Cloud — ya hecho
 
-1. En el proyecto de GCP que quieras, habilita la **Google Analytics Data API**.
-2. Crea una **cuenta de servicio** y genera una **clave JSON**
-   (*IAM → Cuentas de servicio → Claves → Añadir clave*).
-3. En **GA4 → Administrar → Gestión de accesos a la propiedad**, añade el email de
-   la cuenta de servicio (`...@....iam.gserviceaccount.com`) con rol **Lector**.
-   Sin este paso la API responde 403 aunque la clave sea válida.
-4. Anota el **ID numérico de la propiedad** (*Administrar → Detalles de la
-   propiedad*). Son solo dígitos, sin el prefijo `properties/`.
+La parte de Google está montada y verificada contra la API:
+
+| | |
+|---|---|
+| Proyecto GCP | `ga-claude-decorcenter` |
+| Cuenta de servicio | `claude-mcp@ga-claude-decorcenter.iam.gserviceaccount.com` |
+| Cuenta GA4 | DECOR CENTER (`accounts/41077253`) |
+| Propiedad | Decorcenter - Producción |
+| `GA4_PROPERTY_ID` | `276921254` |
+
+La cuenta de servicio ya figura con acceso de lectura en la propiedad, y tanto la
+Analytics Data API como la Admin API responden.
+
+Si algún día hay que rehacerlo desde cero: habilita la **Google Analytics Data
+API** en el proyecto, crea la cuenta de servicio con clave JSON (*IAM → Cuentas de
+servicio → Claves*), y añade su email en **GA4 → Administrar → Gestión de accesos a
+la propiedad** con rol **Lector**. Sin ese último paso la API devuelve 403 aunque
+la clave sea válida.
 
 ### 2. Codifica la clave en base64
 
@@ -54,7 +64,7 @@ En los ajustes del entorno de Claude Code en la web
 
 | Variable | Valor |
 |---|---|
-| `GA4_PROPERTY_ID` | El ID numérico de la propiedad (ej. `123456789`) |
+| `GA4_PROPERTY_ID` | `276921254` |
 | `GA4_SA_KEY_B64` | La cadena base64 del paso 2 |
 
 El lanzador también acepta `GA4_SA_KEY_JSON` con el JSON en crudo, si tu entorno
@@ -82,8 +92,13 @@ Un arranque correcto imprime en `stderr`:
 ```
 ga4-launch: credenciales escritas en /tmp/ga4-mcp/service-account.json
 Starting GA4 MCP server...
-Fetching schema for property '<tu-id>'...
+Fetching schema for property '276921254'...
+Schema loaded successfully.
 ```
+
+El montaje se validó completo por stdio: `initialize`, carga de esquema y una
+llamada real a `get_ga4_data` (usuarios activos y sesiones de los últimos 7 días)
+que devolvió datos de la propiedad.
 
 Si algo falta, el lanzador falla rápido y dice cuál de las dos variables es.
 
@@ -105,7 +120,11 @@ así que conviene pasar por `search_schema` en lugar de escribirlos de memoria.
 - **Telemetría desactivada.** El paquete envía eventos de uso a un endpoint de
   terceros (`ga4.builditwithai.xyz`) por defecto; `.mcp.json` fija
   `GA_MCP_TELEMETRY=false`.
-- **Es software de terceros, no de Google.** Va a recibir una clave con acceso de
-  lectura a tus datos de analítica. Conviene dedicarle una cuenta de servicio
-  propia, limitada a rol Lector y solo a las propiedades que necesite, en lugar de
-  reutilizar una clave con más permisos.
+- **Es software de terceros, no de Google.** Recibe una clave con acceso de lectura
+  a los datos de analítica. Por eso usa una cuenta de servicio dedicada
+  (`claude-mcp@...`), limitada a rol Lector y solo a la propiedad que necesita.
+- **Rotación de claves.** Si una clave privada sale alguna vez del sitio donde se
+  generó (se sube a un chat, se pega en un ticket, se manda por correo), deja de
+  ser secreta: bórrala en *IAM → Cuentas de servicio → Claves* y genera otra. El
+  `client_email` no cambia, así que el acceso concedido en GA4 se mantiene y solo
+  hay que actualizar `GA4_SA_KEY_B64`.
