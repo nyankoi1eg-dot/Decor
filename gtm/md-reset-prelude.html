@@ -1,0 +1,78 @@
+<!--
+  MODO DALTÓNICO · DECOR CENTER — prólogo de reset
+
+  Pega este bloque AL PRINCIPIO de la etiqueta HTML personalizada de GTM,
+  ANTES del <style> de marca y ANTES del script del widget. Se ejecuta de forma
+  síncrona, así que el estado queda limpio antes de que el widget arranque.
+
+  Claves que usa el widget (las únicas que se tocan aquí):
+    md_on          "1" | "0"        modo activado
+    md_type        deuteranopia|…   filtro elegido
+    md_popup_seen  "1"              el popup de lanzamiento ya se mostró
+    md_preview     "1"              vista previa pegajosa que activa ?md-preview
+-->
+<script>
+(function () {
+  "use strict";
+
+  /* ── Configuración ───────────────────────────────────────────────────── */
+
+  // Sube esta fecha cada vez que quieras volver a mostrar el popup a TODOS,
+  // incluidos los que ya entraron antes. Se aplica una sola vez por visitante.
+  var RELAUNCH = '2026-09-06';
+
+  // Parámetro de URL para el borrado total manual: ?mdReset=1
+  var PARAM = 'mdReset';
+
+  // Dónde se anota la versión ya aplicada. Esta clave no se borra nunca.
+  var VKEY = 'md_relaunch';
+
+  // true  -> el reset por versión respeta md_on / md_type: a quien ya eligió un
+  //          filtro no se le desactiva, solo se le vuelve a ofrecer el popup.
+  // false -> el reset por versión deja el navegador como el de un visitante nuevo.
+  var KEEP_PREFERENCE = true;
+
+  // true -> a quien ya tiene el modo activado no se le repite el popup.
+  var SKIP_IF_ACTIVE = true;
+
+  /* ── Implementación ──────────────────────────────────────────────────── */
+
+  var ALL  = ['md_on', 'md_type', 'md_popup_seen', 'md_preview'];
+  var SOFT = ['md_popup_seen', 'md_preview'];
+
+  function read(k)     { try { return localStorage.getItem(k); } catch (e) { return null; } }
+  function write(k, v) { try { localStorage.setItem(k, v); }     catch (e) {} }
+  function drop(keys)  {
+    keys.forEach(function (k) {
+      try { localStorage.removeItem(k); }   catch (e) {}
+      try { sessionStorage.removeItem(k); } catch (e) {}
+    });
+  }
+
+  /* 1. Reset manual por URL — borrado total y recarga ya limpia ─────────── */
+  var qs;
+  try { qs = new URLSearchParams(location.search); } catch (e) { qs = null; }
+
+  if (qs && qs.has(PARAM)) {
+    drop(ALL);
+    write(VKEY, RELAUNCH);
+    qs.delete(PARAM);
+    var rest = qs.toString();
+    // Sin el parámetro la recarga cae en el punto 2, donde la versión ya
+    // coincide: no hay bucle posible.
+    location.replace(location.pathname + (rest ? '?' + rest : '') + location.hash);
+    return;
+  }
+
+  /* 2. Reset automático por versión — alcanza a los visitantes recurrentes ─ */
+  if (read(VKEY) !== RELAUNCH) {
+    if (SKIP_IF_ACTIVE && read('md_on') === '1') {
+      write('md_popup_seen', '1');   // ya lo usa: no le repitas el popup
+      drop(['md_preview']);
+    } else {
+      drop(KEEP_PREFERENCE ? SOFT : ALL);
+    }
+    write(VKEY, RELAUNCH);
+  }
+})();
+</script>
