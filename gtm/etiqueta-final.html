@@ -1,0 +1,81 @@
+<!--
+  MODO DALTÓNICO · DECOR CENTER
+  GTM → etiqueta HTML personalizada. Contenido completo: reemplaza lo que hay.
+  Activador: DOM Ready · All Pages
+
+  El bloque de arriba limpia el estado que el widget dejó en el navegador de los
+  visitantes que ya entraron antes. Se ejecuta antes de que el widget arranque.
+
+  · Reset manual (pruebas):  https://decorcenter.pe/?mdReset=1
+  · Reset a todos:           sube RELAUNCH y publica el contenedor.
+-->
+<script>
+(function () {
+  "use strict";
+
+  /* ── Configuración ───────────────────────────────────────────────────── */
+
+  // Sube esta fecha cada vez que quieras volver a mostrar el popup a TODOS,
+  // incluidos los que ya entraron antes. Se aplica una sola vez por visitante.
+  var RELAUNCH = '2026-09-06';
+
+  // Parámetro de URL para el borrado total manual: ?mdReset=1
+  var PARAM = 'mdReset';
+
+  // Dónde se anota la versión ya aplicada. Esta clave no se borra nunca.
+  var VKEY = 'md_relaunch';
+
+  // true  -> respeta md_on / md_type: a quien ya eligió un filtro no se le
+  //          desactiva el modo, solo se le vuelve a ofrecer el popup.
+  // false -> deja el navegador como el de un visitante nuevo.
+  var KEEP_PREFERENCE = true;
+
+  // true -> no repetir el popup a quien ya tiene el modo activado.
+  var SKIP_IF_ACTIVE = true;
+
+  /* ── Implementación ──────────────────────────────────────────────────── */
+
+  // Las cuatro claves del widget. No se toca nada más: un localStorage.clear()
+  // se llevaría por delante el carrito y la sesión de la tienda.
+  var ALL  = ['md_on', 'md_type', 'md_popup_seen', 'md_preview'];
+  var SOFT = ['md_popup_seen', 'md_preview'];
+
+  function read(k)     { try { return localStorage.getItem(k); } catch (e) { return null; } }
+  function write(k, v) { try { localStorage.setItem(k, v); }     catch (e) {} }
+  function drop(keys)  {
+    keys.forEach(function (k) {
+      try { localStorage.removeItem(k); }   catch (e) {}
+      try { sessionStorage.removeItem(k); } catch (e) {}
+    });
+  }
+
+  /* 1. Reset manual por URL — borrado total y recarga ya limpia ─────────── */
+  var qs;
+  try { qs = new URLSearchParams(location.search); } catch (e) { qs = null; }
+
+  if (qs && qs.has(PARAM)) {
+    drop(ALL);
+    write(VKEY, RELAUNCH);
+    qs.delete(PARAM);
+    var rest = qs.toString();
+    // Sin el parámetro, la recarga cae en el punto 2 y la versión ya coincide:
+    // no hay bucle posible.
+    location.replace(location.pathname + (rest ? '?' + rest : '') + location.hash);
+    return;
+  }
+
+  /* 2. Reset automático por versión — alcanza a los visitantes recurrentes ─ */
+  if (read(VKEY) !== RELAUNCH) {
+    if (SKIP_IF_ACTIVE && read('md_on') === '1') {
+      write('md_popup_seen', '1');   // ya lo usa: no le repitas el popup
+      drop(['md_preview']);
+    } else {
+      drop(KEEP_PREFERENCE ? SOFT : ALL);
+    }
+    write(VKEY, RELAUNCH);
+  }
+})();
+</script>
+
+<!-- Sube ?v= junto con RELAUNCH para invalidar la copia cacheada del script. -->
+<script src="https://modo-daltonico.vercel.app/clients/decorcenter.js?v=2026-09-06" defer></script>
