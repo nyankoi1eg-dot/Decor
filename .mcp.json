@@ -6,6 +6,13 @@
       "env": {
         "GA_MCP_TELEMETRY": "false"
       }
+    },
+    "gtm": {
+      "type": "http",
+      "url": "http://127.0.0.1:8391/",
+      "headers": {
+        "Authorization": "Bearer ${GTM_MCP_API_KEY}"
+      }
     }
   }
 }
