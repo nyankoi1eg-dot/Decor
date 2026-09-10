@@ -171,19 +171,26 @@ servidor solo escucha en loopback. Las llamadas que sí salen son las suyas a
 
 ### Puesta en marcha
 
-#### 1. Crea la cuenta de servicio
+#### 1. Crea la cuenta de servicio — ya hecho
 
-Puedes reutilizar el proyecto `ga-claude-decorcenter` o usar otro. Crea una cuenta
-de servicio **distinta de la de GA4** (así los permisos no se mezclan) y descarga
-su clave JSON en *IAM → Cuentas de servicio → Claves*.
+| | |
+|---|---|
+| Proyecto GCP | `gtm-mcp-decorcenter` |
+| Cuenta de servicio | `gtm-mcp-decorcenter@gtm-mcp-decorcenter.iam.gserviceaccount.com` |
+| Contenedor GTM | `GTM-ND7VH8Z6` |
 
-Habilita la **Tag Manager API** en el proyecto. No hace falta darle ningún rol de
-IAM: el acceso se concede dentro de GTM, no en Google Cloud.
+Es una cuenta de servicio **distinta de la de GA4**, en su propio proyecto, para
+que los permisos no se mezclen. La clave JSON se descarga en *IAM → Cuentas de
+servicio → Claves*.
+
+Comprueba que la **Tag Manager API** está habilitada en el proyecto. No hace falta
+darle ningún rol de IAM: el acceso se concede dentro de GTM, no en Google Cloud.
 
 #### 2. Dale acceso de solo lectura en GTM
 
-En **GTM → Administrar → Gestión de usuarios**, añade el `client_email` de la
-cuenta de servicio con permiso de **Lectura** sobre la cuenta y el contenedor.
+En **GTM → Administrar → Gestión de usuarios** del contenedor `GTM-ND7VH8Z6`,
+añade `gtm-mcp-decorcenter@gtm-mcp-decorcenter.iam.gserviceaccount.com` con
+permiso de **Lectura** sobre la cuenta y el contenedor.
 
 Sin este paso la API devuelve 403 aunque la clave sea válida — igual que pasa con
 GA4.
@@ -192,8 +199,26 @@ GA4.
 
 | Variable | Valor |
 |---|---|
-| `GTM_SA_KEY_B64` | La clave JSON en base64 (`base64 -w0 clave.json`) |
-| `GTM_MCP_API_KEY` | Una cadena larga y aleatoria que tú eliges (`openssl rand -base64 32`) |
+| `GTM_SA_KEY_B64` | La clave JSON en base64 |
+| `GTM_MCP_API_KEY` | Una cadena larga y aleatoria que tú eliges |
+
+Para generarlas en Windows, desde PowerShell:
+
+```powershell
+# GTM_SA_KEY_B64 — el JSON de la clave en una sola línea
+[Convert]::ToBase64String([IO.File]::ReadAllBytes("C:\ruta\a\tu-clave.json"))
+
+# GTM_MCP_API_KEY — 32 bytes aleatorios
+$b = New-Object byte[] 32
+[Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($b)
+[Convert]::ToBase64String($b)
+```
+
+En Linux o macOS: `base64 -w0 clave.json` y `openssl rand -base64 32`.
+
+**La clave privada no se pega nunca en un chat ni en el repositorio**, solo en el
+formulario de variables de entorno. Si alguna vez circula por otro sitio, deja de
+ser secreta: rótala (ver *Notas*).
 
 `GTM_MCP_API_KEY` es un secreto compartido **local**: el servidor lo exige en
 cada petición y `.mcp.json` lo envía en la cabecera `Authorization`. No es una
