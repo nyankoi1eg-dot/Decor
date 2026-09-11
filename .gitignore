@@ -9,3 +9,7 @@ gha-creds-*.json
 .env
 .env.*
 !.env.example
+
+# Datos crudos de Botmaker: contienen datos personales de clientes.
+botmaker/**/raw_*.json
+botmaker/**/resultados.json
