@@ -1,0 +1,739 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="data:,">
+<title>Reporte de embudo conversacional — Decor Center</title>
+<!-- Archivo autónomo: no requiere instalar nada. Se abre con doble clic. -->
+<style>
+:root {
+  color-scheme: light;
+  --plane:          #f9f9f7;
+  --surface-1:      #fcfcfb;
+  --text-primary:   #0b0b0b;
+  --text-secondary: #52514e;
+  --text-muted:     #898781;
+  --grid:           #e1e0d9;
+  --axis:           #c3c2b7;
+  --border:         rgba(11,11,11,0.10);
+  --series-1:       #2a78d6;
+  --series-2:       #eb6834;
+  --series-3:       #1baf7a;
+  --step-1:         #86b6ef;
+  --step-2:         #5598e7;
+  --step-3:         #2a78d6;
+  --step-4:         #1c5cab;
+  --critical:       #d03b3b;
+  --field-bg:       #ffffff;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --plane:          #0d0d0d;
+    --surface-1:      #1a1a19;
+    --text-primary:   #ffffff;
+    --text-secondary: #c3c2b7;
+    --text-muted:     #898781;
+    --grid:           #2c2c2a;
+    --axis:           #383835;
+    --border:         rgba(255,255,255,0.10);
+    --series-1:       #3987e5;
+    --series-2:       #d95926;
+    --series-3:       #199e70;
+    --step-1:         #6da7ec;
+    --step-2:         #3987e5;
+    --step-3:         #256abf;
+    --step-4:         #184f95;
+    --critical:       #d03b3b;
+    --field-bg:       #111110;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --plane:          #0d0d0d;
+  --surface-1:      #1a1a19;
+  --text-primary:   #ffffff;
+  --text-secondary: #c3c2b7;
+  --text-muted:     #898781;
+  --grid:           #2c2c2a;
+  --axis:           #383835;
+  --border:         rgba(255,255,255,0.10);
+  --series-1:       #3987e5;
+  --series-2:       #d95926;
+  --series-3:       #199e70;
+  --step-1:         #6da7ec;
+  --step-2:         #3987e5;
+  --step-3:         #256abf;
+  --step-4:         #184f95;
+  --critical:       #d03b3b;
+  --field-bg:       #111110;
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body {
+  background: var(--plane);
+  color: var(--text-primary);
+  font: 14px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+  padding-block: 32px;
+  padding-inline: 16px;
+}
+.wrap { max-width: 1060px; margin: 0 auto; }
+h1 { font-size: 22px; font-weight: 600; margin: 0 0 4px; letter-spacing: -0.01em; }
+.sub { color: var(--text-secondary); margin: 0 0 24px; }
+.card {
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 20px;
+  margin-bottom: 16px;
+}
+h2 { font-size: 15px; font-weight: 600; margin: 0 0 2px; }
+.cap { color: var(--text-secondary); font-size: 13px; margin: 0 0 18px; }
+
+/* ---- formulario ---- */
+.fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; }
+label { display: block; font-size: 12px; font-weight: 600; color: var(--text-secondary); margin-bottom: 5px; }
+input[type=text], input[type=password], input[type=date] {
+  width: 100%; padding: 9px 11px; font: inherit;
+  color: var(--text-primary); background: var(--field-bg);
+  border: 1px solid var(--axis); border-radius: 7px;
+}
+input:focus-visible { outline: 2px solid var(--series-1); outline-offset: 1px; border-color: transparent; }
+.hint { font-size: 12px; color: var(--text-muted); margin-top: 6px; }
+.presets { display: flex; flex-wrap: wrap; gap: 8px; margin: 16px 0 4px; }
+button {
+  font: inherit; cursor: pointer; border-radius: 7px;
+  border: 1px solid var(--axis); background: var(--surface-1);
+  color: var(--text-primary); padding: 7px 13px;
+}
+button:hover { border-color: var(--series-1); }
+button[aria-pressed=true] { border-color: var(--series-1); color: var(--series-1); font-weight: 600; }
+.primary {
+  background: var(--series-1); border-color: var(--series-1);
+  color: #fff; font-weight: 600; padding: 10px 20px; margin-top: 18px;
+}
+.primary:hover { filter: brightness(1.08); }
+.primary[disabled] { opacity: .55; cursor: progress; }
+details { margin-top: 16px; }
+summary { cursor: pointer; font-size: 13px; color: var(--text-secondary); }
+details > .fields { margin-top: 12px; }
+.check { display: flex; align-items: center; gap: 8px; margin-top: 12px; font-size: 13px; color: var(--text-secondary); }
+.check input { accent-color: var(--series-1); }
+
+.msg { padding: 12px 14px; border-radius: 8px; font-size: 13px; margin-top: 16px; }
+.msg.error { background: color-mix(in srgb, var(--critical) 12%, var(--surface-1)); color: var(--text-primary); border: 1px solid color-mix(in srgb, var(--critical) 45%, transparent); }
+
+/* ---- reporte ---- */
+#reporte[hidden] { display: none !important; }
+.loading { opacity: .45; transition: opacity .15s; }
+.hero-row { display: grid; grid-template-columns: minmax(200px, 1.1fr) 2fr; gap: 24px; align-items: center; }
+.hero-num { font-size: 52px; font-weight: 600; line-height: 1.05; letter-spacing: -0.02em; }
+.hero-lab { color: var(--text-secondary); font-size: 13px; margin-top: 2px; }
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 18px; }
+.tile-v { font-size: 26px; font-weight: 600; letter-spacing: -0.01em; }
+.tile-l { color: var(--text-secondary); font-size: 12px; margin-top: 1px; }
+
+table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; font-size: 13px; }
+th, td { padding: 8px 10px; text-align: right; border-bottom: 1px solid var(--grid); white-space: nowrap; }
+th { color: var(--text-secondary); font-weight: 600; font-size: 12px; }
+th:first-child, td:first-child { text-align: left; }
+tbody tr:last-child td { border-bottom: none; }
+tfoot td { font-weight: 600; border-top: 1px solid var(--axis); border-bottom: none; }
+.scroll-x { overflow-x: auto; }
+
+.legend { display: flex; flex-wrap: wrap; gap: 16px; margin-bottom: 14px; font-size: 12px; color: var(--text-secondary); }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.dot { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
+/* Los gráficos se desplazan en pantallas angostas en vez de encogerse:
+   a 390px un viewBox de 720 dejaría el texto en ~6px. */
+.chart { overflow-x: auto; overflow-y: hidden; padding-block: 4px; }
+.chart svg { min-width: 600px; }
+svg { display: block; width: 100%; height: auto; overflow: visible; }
+.tick { fill: var(--text-muted); font-size: 11px; }
+.vlab { fill: var(--text-secondary); font-size: 11px; font-variant-numeric: tabular-nums; }
+.slab { fill: var(--text-primary); font-size: 12px; }
+.conv { fill: var(--text-secondary); font-size: 11px; }
+.foot { color: var(--text-muted); font-size: 12px; margin-top: 22px; text-align: center; }
+
+@media (max-width: 640px) {
+  .hero-row { grid-template-columns: 1fr; gap: 20px; }
+  .hero-num { font-size: 42px; }
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Reporte de embudo conversacional</h1>
+  <p class="sub">Ingresos al chat, atención y derivación a tienda, desde Botmaker.</p>
+
+  <form class="card" id="form">
+    <h2>Parámetros</h2>
+    <p class="cap">Todo ocurre en tu navegador: el token viaja directo a Botmaker.</p>
+    <div class="fields">
+      <div style="grid-column: 1 / -1">
+        <label for="token">Token de acceso de Botmaker</label>
+        <input type="password" id="token" autocomplete="off" spellcheck="false"
+               placeholder="Pegá aquí el token">
+        <p class="hint">Botmaker → Integraciones → API.</p>
+      </div>
+      <div>
+        <label for="desde">Desde</label>
+        <input type="date" id="desde" required>
+      </div>
+      <div>
+        <label for="hasta">Hasta</label>
+        <input type="date" id="hasta" required>
+      </div>
+    </div>
+
+    <div class="presets" role="group" aria-label="Rangos rápidos">
+      <button type="button" data-preset="semana">Semana pasada</button>
+      <button type="button" data-preset="7">Últimos 7 días</button>
+      <button type="button" data-preset="30">Últimos 30 días</button>
+      <button type="button" data-preset="mes">Mes actual</button>
+    </div>
+
+    <label class="check"><input type="checkbox" id="recordar">
+      Recordar el token mientras la pestaña esté abierta</label>
+
+
+    <button type="submit" class="primary" id="btn">Generar reporte</button>
+    <div class="msg error" id="error" hidden></div>
+  </form>
+
+  <div id="reporte" hidden></div>
+</div>
+<script>
+'use strict';
+
+const $ = (id) => document.getElementById(id);
+const fmt = (n) => (n == null ? '—' : n.toLocaleString('es-PE'));
+const pct = (n) => (n == null ? '—' : n.toFixed(1) + '%');
+const iso = (d) => d.toISOString().slice(0, 10);
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+const DIAS = { Mon: 'Lun', Tue: 'Mar', Wed: 'Mié', Thu: 'Jue', Fri: 'Vie', Sat: 'Sáb', Sun: 'Dom' };
+const SERIES = [
+  { clave: 'ingresos', nombre: 'Ingresaron', color: 'var(--series-1)' },
+  { clave: 'atendidos', nombre: 'Atendidos', color: 'var(--series-2)' },
+  { clave: 'derivados_tienda', nombre: 'Derivados a tienda', color: 'var(--series-3)' },
+];
+
+/* ------------------------------------------------------------ geometria */
+// Barra con el extremo de dato redondeado (4px) y la base cuadrada.
+function barraH(x, y, w, h, r = 4) {
+  const rr = Math.min(r, Math.max(w, 0));
+  if (w <= 0.5) return `M${x} ${y}h0`;
+  return `M${x} ${y}h${w - rr}a${rr} ${rr} 0 0 1 ${rr} ${rr}v${h - 2 * rr}a${rr} ${rr} 0 0 1 ${-rr} ${rr}H${x}z`;
+}
+function barraV(x, yBase, w, h, r = 4) {
+  const rr = Math.min(r, Math.max(h, 0), w / 2);
+  if (h <= 0.5) return `M${x} ${yBase}h0`;
+  const y = yBase - h;
+  return `M${x} ${yBase}V${y + rr}a${rr} ${rr} 0 0 1 ${rr} ${-rr}h${w - 2 * rr}a${rr} ${rr} 0 0 1 ${rr} ${rr}V${yBase}z`;
+}
+function ticks(max, n = 4) {
+  if (max <= 0) return [0];
+  const bruto = max / n;
+  const mag = Math.pow(10, Math.floor(Math.log10(bruto)));
+  // Son conteos de sesiones: el paso nunca baja de 1, si no salen ticks repetidos.
+  const paso = Math.max(1, [1, 2, 2.5, 5, 10].map((m) => m * mag).find((p) => p >= bruto) || mag * 10);
+  const out = [];
+  // Se generan pasos hasta cubrir el maximo: si el tope quedara por debajo,
+  // la barra mas alta se dibujaria fuera del area del grafico.
+  for (let v = 0; v < max - paso * 0.001; v += paso) out.push(Math.round(v));
+  out.push(Math.round(Math.ceil(max / paso) * paso));
+  return [...new Set(out)];
+}
+
+/* ------------------------------------------------------------- tooltips */
+let tip;
+function mostrarTip(ev, html) {
+  if (!tip) {
+    tip = document.createElement('div');
+    tip.style.cssText = 'position:fixed;z-index:50;pointer-events:none;background:var(--surface-1);' +
+      'color:var(--text-primary);border:1px solid var(--border);border-radius:7px;padding:8px 10px;' +
+      'font:12px/1.45 system-ui,-apple-system,"Segoe UI",sans-serif;box-shadow:0 4px 14px rgba(0,0,0,.14);max-width:230px';
+    document.body.appendChild(tip);
+  }
+  tip.innerHTML = html;
+  tip.hidden = false;
+  const m = 14, r = tip.getBoundingClientRect();
+  let x = ev.clientX + m, y = ev.clientY + m;
+  if (x + r.width > innerWidth - 8) x = ev.clientX - r.width - m;
+  if (y + r.height > innerHeight - 8) y = ev.clientY - r.height - m;
+  tip.style.left = Math.max(8, x) + 'px';
+  tip.style.top = Math.max(8, y) + 'px';
+}
+const ocultarTip = () => { if (tip) tip.hidden = true; };
+
+function conectarTips(raiz) {
+  raiz.querySelectorAll('[data-tip]').forEach((el) => {
+    el.style.cursor = 'default';
+    el.addEventListener('mousemove', (ev) => mostrarTip(ev, el.dataset.tip));
+    el.addEventListener('mouseleave', ocultarTip);
+    el.addEventListener('focus', (ev) => {
+      const r = el.getBoundingClientRect();
+      mostrarTip({ clientX: r.left + r.width / 2, clientY: r.top }, el.dataset.tip);
+    });
+    el.addEventListener('blur', ocultarTip);
+  });
+}
+
+/* ------------------------------------------------------ grafico: embudo */
+function svgEmbudo(t) {
+  const etapas = [
+    { nom: 'Ingresaron al chat', v: t.ingresos, paso: 'var(--step-1)' },
+    { nom: 'Pasaron a cola', v: t.en_cola, paso: 'var(--step-2)', conv: t.pct_ingreso_a_cola },
+    { nom: 'Atendidos por asesor', v: t.atendidos, paso: 'var(--step-3)', conv: t.pct_cola_a_atendido },
+    { nom: 'Derivados a tienda', v: t.derivados_tienda, paso: 'var(--step-4)', conv: t.pct_atendido_a_tienda },
+  ];
+  const W = 720, fila = 62, alto = 24, izq = 172, der = 68;
+  const H = etapas.length * fila;
+  const max = Math.max(...etapas.map((e) => e.v), 1);
+  const ancho = W - izq - der;
+
+  let s = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Embudo por etapas">`;
+  etapas.forEach((e, i) => {
+    const y = i * fila + 10;
+    const w = (e.v / max) * ancho;
+    const tipo = `<strong>${esc(e.nom)}</strong><br>${fmt(e.v)} sesiones` +
+      (e.conv != null ? `<br>${pct(e.conv)} de la etapa anterior` : '');
+    s += `<text class="slab" x="0" y="${y + alto / 2 + 4}">${esc(e.nom)}</text>`;
+    s += `<g tabindex="0" data-tip="${esc(tipo)}"><rect x="${izq}" y="${y - 6}" width="${ancho}" height="${alto + 12}" fill="transparent"/>` +
+      `<path d="${barraH(izq, y, w, alto)}" fill="${e.paso}"/></g>`;
+    s += `<text class="vlab" x="${izq + w + 8}" y="${y + alto / 2 + 4}">${fmt(e.v)}</text>`;
+    // Conversion respecto de la etapa anterior, entre barra y barra.
+    if (e.conv != null) {
+      s += `<text class="conv" x="${izq}" y="${y - 12}">▼ ${pct(e.conv)}</text>`;
+    }
+  });
+  return s + '</svg>';
+}
+
+/* ------------------------------------------- grafico: evolucion por dia */
+function svgDiario(dias) {
+  const W = 720, H = 240, izq = 40, der = 12, arr = 12, abj = 34;
+  const pw = W - izq - der, ph = H - arr - abj;
+  const max = Math.max(...dias.map((d) => d.ingresos), 1);
+  const tks = ticks(max);
+  const tope = tks[tks.length - 1];
+  const y = (v) => arr + ph - (v / tope) * ph;
+  const banda = pw / dias.length;
+  const lineas = dias.length > 14;
+
+  let s = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Evolución diaria por etapa">`;
+  tks.forEach((t) => {
+    s += `<line x1="${izq}" x2="${W - der}" y1="${y(t)}" y2="${y(t)}" stroke="var(--grid)" stroke-width="1"/>` +
+      `<text class="tick" x="${izq - 8}" y="${y(t) + 4}" text-anchor="end">${fmt(t)}</text>`;
+  });
+
+  if (lineas) {
+    const px = (i) => izq + banda * (i + 0.5);
+    SERIES.forEach((se) => {
+      const pts = dias.map((d, i) => `${px(i)},${y(d[se.clave])}`).join(' ');
+      s += `<polyline points="${pts}" fill="none" stroke="${se.color}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>`;
+      const ult = dias.length - 1;
+      s += `<circle cx="${px(ult)}" cy="${y(dias[ult][se.clave])}" r="4" fill="${se.color}" stroke="var(--surface-1)" stroke-width="2"/>`;
+    });
+    dias.forEach((d, i) => {
+      const filas = SERIES.map((se) => `${esc(se.nombre)}: <strong>${fmt(d[se.clave])}</strong>`).join('<br>');
+      s += `<g tabindex="0" data-tip="${esc(`<strong>${d.fecha}</strong><br>${filas}`)}">` +
+        `<rect x="${izq + banda * i}" y="${arr}" width="${banda}" height="${ph}" fill="transparent"/></g>`;
+    });
+  } else {
+    const hueco = 2, grupo = Math.min(banda * 0.72, 72);
+    const bw = Math.max(3, (grupo - hueco * (SERIES.length - 1)) / SERIES.length);
+    dias.forEach((d, i) => {
+      const x0 = izq + banda * i + (banda - (bw * SERIES.length + hueco * 2)) / 2;
+      const filas = SERIES.map((se) => `${esc(se.nombre)}: <strong>${fmt(d[se.clave])}</strong>`).join('<br>');
+      s += `<g tabindex="0" data-tip="${esc(`<strong>${d.fecha}</strong><br>${filas}`)}">` +
+        `<rect x="${izq + banda * i}" y="${arr}" width="${banda}" height="${ph}" fill="transparent"/>`;
+      SERIES.forEach((se, j) => {
+        const h = (d[se.clave] / tope) * ph;
+        s += `<path d="${barraV(x0 + j * (bw + hueco), arr + ph, bw, h)}" fill="${se.color}"/>`;
+      });
+      s += `</g>`;
+    });
+  }
+
+  dias.forEach((d, i) => {
+    const paso = Math.ceil(dias.length / 10);
+    if (i % paso) return;
+    const et = dias.length > 10 ? d.fecha.slice(5) : (DIAS[d.dia_semana] || '') + ' ' + d.fecha.slice(8);
+    s += `<text class="tick" x="${izq + banda * (i + 0.5)}" y="${H - 12}" text-anchor="middle">${esc(et)}</text>`;
+  });
+  return s + '</svg>';
+}
+
+/* ------------------------------------------ grafico: derivacion tienda */
+function svgTiendas(lista) {
+  const top = lista.slice(0, 12);
+  const W = 720, fila = 30, alto = 16, izq = 132, der = 54;
+  const H = Math.max(top.length * fila, fila);
+  const max = Math.max(...top.map((t) => t.derivaciones), 1);
+  const ancho = W - izq - der;
+  let s = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Derivaciones por tienda">`;
+  top.forEach((t, i) => {
+    const y = i * fila + 5;
+    const w = (t.derivaciones / max) * ancho;
+    const nom = t.tienda.replace(/^TDA/, '');
+    s += `<text class="slab" x="0" y="${y + alto / 2 + 4}">${esc(nom)}</text>`;
+    s += `<g tabindex="0" data-tip="${esc(`<strong>${nom}</strong><br>${fmt(t.derivaciones)} derivaciones`)}">` +
+      `<rect x="${izq}" y="${y - 5}" width="${ancho}" height="${alto + 10}" fill="transparent"/>` +
+      `<path d="${barraH(izq, y, w, alto)}" fill="var(--series-1)"/></g>`;
+    s += `<text class="vlab" x="${izq + w + 8}" y="${y + alto / 2 + 4}">${fmt(t.derivaciones)}</text>`;
+  });
+  return s + '</svg>';
+}
+
+/* ---------------------------------------------------------------- tabla */
+function tablaDiaria(dias, t) {
+  const cols = [
+    ['Fecha', (d) => d.fecha], ['Día', (d) => DIAS[d.dia_semana] || d.dia_semana],
+    ['Ingresaron', (d) => fmt(d.ingresos)], ['Únicas', (d) => fmt(d.personas_unicas)],
+    ['A cola', (d) => fmt(d.en_cola)], ['Atendidos', (d) => fmt(d.atendidos)],
+    ['A tienda', (d) => fmt(d.derivados_tienda)],
+    ['% Ing→Cola', (d) => pct(d.pct_ingreso_a_cola)],
+    ['% Cola→Aten', (d) => pct(d.pct_cola_a_atendido)],
+    ['% Aten→Tda', (d) => pct(d.pct_atendido_a_tienda)],
+    ['% Global', (d) => pct(d.pct_conversion_global)],
+  ];
+  const th = cols.map((c) => `<th>${esc(c[0])}</th>`).join('');
+  const tb = dias.map((d) => '<tr>' + cols.map((c) => `<td>${esc(c[1](d))}</td>`).join('') + '</tr>').join('');
+  const tf = '<tr><td>Total</td><td></td>' +
+    [t.ingresos, t.personas_unicas, t.en_cola, t.atendidos, t.derivados_tienda].map((v) => `<td>${fmt(v)}</td>`).join('') +
+    [t.pct_ingreso_a_cola, t.pct_cola_a_atendido, t.pct_atendido_a_tienda, t.pct_conversion_global]
+      .map((v) => `<td>${pct(v)}</td>`).join('') + '</tr>';
+  return `<div class="scroll-x"><table><thead><tr>${th}</tr></thead><tbody>${tb}</tbody><tfoot>${tf}</tfoot></table></div>`;
+}
+
+/* --------------------------------------------------------------- render */
+let ultimo = null;
+
+function render(data) {
+  const t = data.totales, dias = data.por_dia, tiendas = data.por_tienda;
+  ultimo = data;
+  const leyenda = SERIES.map((s) =>
+    `<span><i class="dot" style="background:${s.color}"></i>${esc(s.nombre)}</span>`).join('');
+
+  const sinDatos = !t.ingresos;
+  $('reporte').innerHTML = sinDatos
+    ? `<div class="card"><h2>Sin datos</h2><p class="cap">No hubo sesiones entre ${esc(data.periodo.desde)} y ${esc(data.periodo.hasta)}.</p></div>`
+    : `
+    <div class="card">
+      <div class="hero-row">
+        <div>
+          <div class="hero-num">${pct(t.pct_conversion_global)}</div>
+          <div class="hero-lab">Conversión global<br>de ingreso a derivación a tienda</div>
+        </div>
+        <div class="tiles">
+          <div><div class="tile-v">${fmt(t.ingresos)}</div><div class="tile-l">Ingresaron al chat</div></div>
+          <div><div class="tile-v">${fmt(t.personas_unicas)}</div><div class="tile-l">Personas únicas</div></div>
+          <div><div class="tile-v">${fmt(t.atendidos)}</div><div class="tile-l">Atendidos</div></div>
+          <div><div class="tile-v">${fmt(t.derivados_tienda)}</div><div class="tile-l">Derivados a tienda</div></div>
+        </div>
+      </div>
+      <p class="cap" style="margin:20px 0 0">Del ${esc(data.periodo.desde)} al ${esc(data.periodo.hasta)}.</p>
+    </div>
+
+    <div class="card">
+      <h2>Embudo por etapas</h2>
+      <p class="cap">Cada etapa exige haber pasado la anterior; el porcentaje es sobre la etapa previa.</p>
+      <div class="chart">${svgEmbudo(t)}</div>
+    </div>
+
+    <div class="card">
+      <h2>Evolución diaria</h2>
+      <p class="cap">Sesiones por día en cada etapa.</p>
+      <div class="legend">${leyenda}</div>
+      <div class="chart">${svgDiario(dias)}</div>
+    </div>
+
+    <div class="card">
+      <h2>Detalle por día</h2>
+      <p class="cap">Los mismos valores del gráfico, en tabla.</p>
+      ${tablaDiaria(dias, t)}
+      <button type="button" id="csv" style="margin-top:16px">Descargar CSV</button>
+    </div>
+
+    ${tiendas.length ? `<div class="card">
+      <h2>Derivaciones por tienda</h2>
+      <p class="cap">A partir de los tags <code>TDA*</code> del chat.</p>
+      <div class="chart">${svgTiendas(tiendas)}</div>
+    </div>` : ''}
+
+    <p class="foot">Datos de Botmaker · generado el ${new Date().toLocaleString('es-PE')}</p>`;
+
+  $('reporte').hidden = false;
+  conectarTips($('reporte'));
+  const btnCsv = $('csv');
+  if (btnCsv) btnCsv.addEventListener('click', descargarCsv);
+}
+
+function descargarCsv() {
+  if (!ultimo) return;
+  const cols = ['fecha', 'dia_semana', 'ingresos', 'personas_unicas', 'en_cola', 'atendidos',
+    'derivados_tienda', 'pct_ingreso_a_cola', 'pct_cola_a_atendido', 'pct_atendido_a_tienda',
+    'pct_conversion_global'];
+  const filas = [cols.join(','), ...ultimo.por_dia.map((d) => cols.map((c) => d[c] ?? '').join(','))];
+  const url = URL.createObjectURL(new Blob([filas.join('\n')], { type: 'text/csv;charset=utf-8' }));
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `embudo_${ultimo.periodo.desde}_a_${ultimo.periodo.hasta}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+
+</script>
+<script>
+'use strict';
+/* Capa de datos del archivo suelto: el navegador llama a Botmaker directo.
+ *
+ * Es el mismo cálculo que hace funnel.py en el servidor, portado a JS para que
+ * el reporte funcione sin instalar nada. Si se cambia una definición de etapa,
+ * hay que cambiarla en los dos sitios.
+ */
+
+const BM_BASE = 'https://api.botmaker.com/v2.0';
+const OFFSET = -5;                       // Lima, UTC-5
+const DIAS_SIN_LONG_TERM = 7;            // más allá, Botmaker exige long-term-search
+const TIPIFICACIONES_DERIVACION = new Set(['Lead_Calificado', 'CORPORATIVO-LEAD-DERIVADO']);
+const TAGS_DERIVACION = new Set(['DERIVADOS']);
+const PREFIJO_TIENDA = 'TDA';
+const REINTENTOS = new Set([429, 500, 502, 503, 504]);
+
+const dormir = (ms) => new Promise((r) => setTimeout(r, ms));
+
+/* La API sólo acepta UTC con sufijo Z; un offset tipo -05:00 devuelve 400. */
+function aUtcZ(fechaLocal, diasExtra = 0) {
+  const [a, m, d] = fechaLocal.split('-').map(Number);
+  const t = Date.UTC(a, m - 1, d + diasExtra, -OFFSET, 0, 0);
+  return new Date(t).toISOString().replace(/\.\d{3}Z$/, 'Z');
+}
+
+async function pedir(url, token, intento = 0) {
+  let r;
+  try {
+    r = await fetch(url, { headers: { 'access-token': token, Accept: 'application/json' } });
+  } catch (e) {
+    // Fallo de red: puede ser corte real o el navegador bloqueando la petición.
+    if (intento < 3) { await dormir(2000 * 2 ** intento); return pedir(url, token, intento + 1); }
+    throw new Error('No se pudo contactar a api.botmaker.com. Revisá la conexión a internet.');
+  }
+  if (REINTENTOS.has(r.status) && intento < 3) {
+    await dormir(2000 * 2 ** intento);
+    return pedir(url, token, intento + 1);
+  }
+  if (r.status === 401 || r.status === 403) {
+    throw new Error('Botmaker rechazó el token (HTTP ' + r.status + '). Verificá que sea el de Integraciones → API y que siga vigente.');
+  }
+  if (r.status === 204) return { items: [], nextPage: null };   // periodo sin registros
+  if (!r.ok) {
+    let det = '';
+    try { det = (await r.json()).errors?.[0]?.message || ''; } catch (e) { /* cuerpo no JSON */ }
+    throw new Error(`Botmaker respondió ${r.status}${det ? ': ' + det : ''}`);
+  }
+  if (r.status === 200 && r.headers.get('content-length') === '0') return { items: [], nextPage: null };
+  return r.json();
+}
+
+async function traerSesiones(desde, hasta, token, avisar) {
+  // Se comparan dias de calendario, no milisegundos: con horas de por medio
+  // un rango de exactamente 7 dias activaria long-term-search sin necesidad,
+  // y eso consume cuota BI de la cuenta. Igual que el calculo de cli.py.
+  const hoyIso = new Date().toISOString().slice(0, 10);
+  const dias = Math.round((Date.parse(hoyIso) - Date.parse(desde)) / 86400000);
+  const largo = dias > DIAS_SIN_LONG_TERM;
+  const q = new URLSearchParams({
+    from: aUtcZ(desde), to: aUtcZ(hasta, 1),
+    'include-events': 'true', 'include-variables': 'true', 'include-open-sessions': 'true',
+  });
+  if (largo) q.set('long-term-search', 'true');
+
+  let url = `${BM_BASE}/sessions?${q}`;
+  const items = [];
+  for (let pagina = 1; pagina <= 500; pagina++) {
+    if (avisar && pagina > 1) avisar(`Descargando… ${items.length} sesiones`);
+    const d = await pedir(url, token);
+    items.push(...(d.items || []));
+    if (!d.nextPage) break;
+    // Botmaker puede devolver la URL en http: forzamos https o el navegador
+    // la bloquea por contenido mixto.
+    url = d.nextPage.replace(/^http:/, 'https:');
+  }
+  return items;
+}
+
+/* --- mismo cálculo que funnel.py: etapas anidadas --- */
+function sesionAFila(s) {
+  const chat = s.chat || {};
+  const ref = chat.chat || {};
+  const eventos = new Set((s.events || []).map((e) => e.name));
+  const tags = new Set(chat.tags || []);
+  const tip = (chat.variables || {}).typification;
+  const tiendas = [...tags].filter((t) => t.startsWith(PREFIJO_TIENDA)).sort();
+
+  const utc = new Date(s.creationTime);
+  const local = new Date(utc.getTime() + OFFSET * 3600000);
+  const fechaLocal = local.toISOString().slice(0, 10);
+
+  const enCola = eventos.has('queue-set') || eventos.has('assigned-to-agent');
+  const atendido = enCola && eventos.has('assigned-to-agent');
+  const derivado = atendido && (TIPIFICACIONES_DERIVACION.has(tip) ||
+    [...tags].some((t) => TAGS_DERIVACION.has(t)) || tiendas.length > 0);
+
+  return { id: s.id, chatId: ref.chatId || '', fechaLocal, enCola, atendido, derivado, tiendas };
+}
+
+function pctSeguro(a, b) { return b ? Math.round((a / b) * 1000) / 10 : null; }
+
+function agregar(filas, desde, hasta) {
+  const porDia = new Map();
+  for (const f of filas) {
+    if (!porDia.has(f.fechaLocal)) porDia.set(f.fechaLocal, []);
+    porDia.get(f.fechaLocal).push(f);
+  }
+  const dias = [...porDia.keys()].sort().map((fecha) => {
+    const g = porDia.get(fecha);
+    const ing = g.length;
+    const cola = g.filter((f) => f.enCola).length;
+    const at = g.filter((f) => f.atendido).length;
+    const der = g.filter((f) => f.derivado).length;
+    return {
+      fecha,
+      dia_semana: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][new Date(fecha + 'T12:00:00Z').getUTCDay()],
+      ingresos: ing, personas_unicas: new Set(g.map((f) => f.chatId)).size,
+      en_cola: cola, atendidos: at, derivados_tienda: der,
+      pct_ingreso_a_cola: pctSeguro(cola, ing), pct_cola_a_atendido: pctSeguro(at, cola),
+      pct_atendido_a_tienda: pctSeguro(der, at), pct_conversion_global: pctSeguro(der, ing),
+    };
+  });
+
+  const ing = filas.length;
+  const cola = filas.filter((f) => f.enCola).length;
+  const at = filas.filter((f) => f.atendido).length;
+  const der = filas.filter((f) => f.derivado).length;
+  const totales = {
+    ingresos: ing, personas_unicas: new Set(filas.map((f) => f.chatId)).size,
+    en_cola: cola, atendidos: at, derivados_tienda: der,
+    pct_ingreso_a_cola: pctSeguro(cola, ing), pct_cola_a_atendido: pctSeguro(at, cola),
+    pct_atendido_a_tienda: pctSeguro(der, at), pct_conversion_global: pctSeguro(der, ing),
+  };
+
+  const conteo = new Map();
+  for (const f of filas) for (const t of f.tiendas) conteo.set(t, (conteo.get(t) || 0) + 1);
+  const porTienda = [...conteo.entries()].sort((a, b) => b[1] - a[1])
+    .map(([tienda, derivaciones]) => ({ tienda, derivaciones }));
+
+  return { periodo: { desde, hasta }, totales, por_dia: dias, por_tienda: porTienda };
+}
+
+async function obtenerDatos({ desde, hasta, token, avisar }) {
+  if (!token) throw new Error('Hace falta el token de acceso de Botmaker.');
+  if (avisar) avisar('Consultando Botmaker…');
+  const sesiones = await traerSesiones(desde, hasta, token, avisar);
+  // Las ventanas solapadas pueden repetir sesiones: deduplicamos por id.
+  const vistas = new Map();
+  for (const s of sesiones) { const f = sesionAFila(s); vistas.set(f.id, f); }
+  const filas = [...vistas.values()].filter((f) => f.fechaLocal >= desde && f.fechaLocal <= hasta);
+  return agregar(filas, desde, hasta);
+}
+
+</script>
+<script>
+'use strict';
+
+/* ---------------------------------------------------------------- rangos */
+function preset(nombre) {
+  const hoy = new Date();
+  let desde, hasta;
+  if (nombre === 'semana') {
+    // Lunes a domingo de la semana pasada.
+    const dow = (hoy.getDay() + 6) % 7;
+    hasta = new Date(hoy); hasta.setDate(hoy.getDate() - dow - 1);
+    desde = new Date(hasta); desde.setDate(hasta.getDate() - 6);
+  } else if (nombre === 'mes') {
+    desde = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
+    hasta = hoy;
+  } else {
+    const n = Number(nombre);
+    hasta = new Date(hoy); hasta.setDate(hoy.getDate() - 1);
+    desde = new Date(hasta); desde.setDate(hasta.getDate() - (n - 1));
+  }
+  return [iso(desde), iso(hasta)];
+}
+
+function marcarPreset(activo) {
+  document.querySelectorAll('[data-preset]').forEach((b) => {
+    b.setAttribute('aria-pressed', String(b.dataset.preset === activo));
+  });
+}
+
+document.querySelectorAll('[data-preset]').forEach((b) => {
+  b.addEventListener('click', () => {
+    const [d, h] = preset(b.dataset.preset);
+    $('desde').value = d; $('hasta').value = h;
+    marcarPreset(b.dataset.preset);
+  });
+});
+['desde', 'hasta'].forEach((id) => $(id).addEventListener('input', () => marcarPreset(null)));
+
+/* ----------------------------------------------------------------- envio */
+$('form').addEventListener('submit', async (ev) => {
+  ev.preventDefault();
+  const token = $('token').value.trim();
+  const apikey = $('apikey') ? $('apikey').value.trim() : '';
+  const desde = $('desde').value, hasta = $('hasta').value;
+  const err = $('error');
+  err.hidden = true;
+
+  if (desde > hasta) {
+    err.textContent = 'La fecha "desde" no puede ser posterior a "hasta".';
+    err.hidden = false;
+    return;
+  }
+
+  sessionStorage.setItem('bm_recordar', $('recordar').checked ? '1' : '');
+  try {
+    if ($('recordar').checked) sessionStorage.setItem('bm_token', token);
+    else sessionStorage.removeItem('bm_token');
+  } catch (e) { /* almacenamiento bloqueado: seguimos sin recordar */ }
+
+  const btn = $('btn');
+  btn.disabled = true;
+  btn.textContent = 'Consultando Botmaker…';
+  $('reporte').classList.add('loading');
+
+  try {
+    // obtenerDatos lo define la capa de datos: api-servidor.js (vía el backend)
+    // o api-botmaker.js (contra Botmaker directo, en el archivo suelto).
+    render(await obtenerDatos({ desde, hasta, token, apikey, avisar: (t) => { btn.textContent = t; } }));
+  } catch (e) {
+    err.textContent = e.message || 'No se pudo generar el reporte.';
+    err.hidden = false;
+    $('reporte').hidden = true;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Generar reporte';
+    $('reporte').classList.remove('loading');
+  }
+});
+
+/* ---------------------------------------------------------------- inicio */
+(function init() {
+  const [d, h] = preset('semana');
+  $('desde').value = d; $('hasta').value = h;
+  marcarPreset('semana');
+  try {
+    const guardado = sessionStorage.getItem('bm_token');
+    if (guardado) { $('token').value = guardado; $('recordar').checked = true; }
+  } catch (e) { /* sessionStorage no disponible */ }
+})();
+
+</script>
+</body>
+</html>

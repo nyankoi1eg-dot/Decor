@@ -4,10 +4,13 @@ Extrae de Botmaker cuántas personas entran al chat, cuántas llegan a atención
 humana, cuántas son atendidas y cuántas terminan derivadas a una tienda, con el
 porcentaje de conversión entre etapas.
 
-Se expone de tres formas, pensadas para convivir:
+Se expone de cuatro formas, pensadas para convivir:
 
-* **App web** (`botmaker_bi/web/`) — pide el token y el rango de fechas, y arma
-  el reporte en pantalla. Es la vía para quien no toca SQL ni Power BI.
+* **Archivo suelto** (`reporte-botmaker.html`) — **no requiere instalar nada**.
+  Se abre con doble clic y consulta Botmaker directamente desde el navegador.
+  Es la vía para quien no tiene Python.
+* **App web servida** (`botmaker_bi/web/`) — lo mismo, pero detrás del backend,
+  para publicarla en un servidor interno.
 * **Endpoint REST** (`botmaker_bi/api.py`) — consulta directa desde Power BI.
 * **Cargador incremental** (`botmaker_bi/cli.py` + `sql/`) — persiste en SQL
   Server con `MERGE` idempotente.
@@ -58,7 +61,35 @@ reflejados también en la sesión vieja.
 Si el negocio prefiere otra definición, se cambia en `funnel.py`
 (`MapeoEtapas`) sin tocar el resto.
 
-## Puesta en marcha
+## Opción sin instalar nada: el archivo suelto
+
+`reporte-botmaker.html` es un único archivo autocontenido —sin dependencias,
+sin CDN, sin servidor—. Se copia a cualquier PC, se abre con doble clic, se
+pega el token, se elige el rango y listo.
+
+Funciona porque la API de Botmaker habilita CORS: responde
+`Access-Control-Allow-Origin` reflejando el origen (incluido `null`, que es el
+que manda una página abierta desde el disco) y acepta el header `access-token`.
+El navegador puede entonces llamar a `api.botmaker.com` sin intermediario.
+
+Para regenerarlo después de tocar la interfaz:
+
+```bash
+python construir_archivo_suelto.py
+```
+
+El script inlina los estilos y los scripts de `botmaker_bi/web/`, sustituyendo
+`api-servidor.js` (que habla con el backend) por `api-botmaker.js` (que habla
+con Botmaker). **El dibujo de los gráficos es el mismo `render.js` en ambas
+versiones**, así que no hay dos copias que puedan divergir. Lo que sí está
+duplicado es el cálculo del embudo, en `funnel.py` y en `api-botmaker.js`: si
+se cambia una definición de etapa hay que tocar los dos. Ambos se verificaron
+dando resultados idénticos sobre los mismos datos.
+
+Sus límites frente a la versión servida: no puede cargar SQL Server, y cada
+persona necesita su propio token.
+
+## Puesta en marcha (versión servida)
 
 ```bash
 pip install -r requirements.txt
@@ -162,3 +193,8 @@ corrida, no sólo el día anterior:
 * Para consultar más allá de los **últimos 7 días** hace falta
   `long-term-search=true`; se activa solo.
 * La paginación viene en `nextPage` como URL absoluta y ya lleva los parámetros.
+  Botmaker puede emitirla con esquema `http:`, que un navegador bloquea por
+  contenido mixto; el archivo suelto la reescribe a `https:`.
+* La API habilita CORS (`Access-Control-Allow-Origin` refleja el origen, y
+  `access-token` figura en `Access-Control-Allow-Headers`), lo que permite
+  consultarla desde una página abierta como archivo local.
