@@ -6,6 +6,7 @@ Formas de consumo
 * ``GET /funnel/sessions`` -> JSON, una fila por sesion (grano de detalle).
 * ``GET /funnel/daily.csv``-> el mismo agregado en CSV.
 * ``GET /funnel/summary``  -> totales del periodo + corte por tienda.
+* ``GET /``                -> app web: pide token y rango de fechas, y arma el reporte.
 
 Power BI Desktop: Obtener datos -> Web -> Avanzadas, URL del endpoint y el
 header ``X-API-Key``. Devolvemos una lista JSON plana, sin envoltorio, para que
@@ -20,9 +21,10 @@ import os
 from typing import Any
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Query
-from fastapi.responses import StreamingResponse
+from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.staticfiles import StaticFiles
 
-from .client import BotmakerClient, BotmakerError
+from .client import BotmakerAuthError, BotmakerClient, BotmakerError
 from .funnel import (
     agregar_por_dia,
     agregar_por_tienda,
@@ -52,6 +54,17 @@ async def _api_key_header(x_api_key: str | None = Header(default=None, alias="X-
     return x_api_key
 
 
+async def _botmaker_token(
+    x_botmaker_token: str | None = Header(default=None, alias="X-Botmaker-Token"),
+) -> str | None:
+    """Token de Botmaker por peticion.
+
+    Permite que cada usuario de la app use su propio token sin que el servidor
+    guarde credenciales. Si no viene, se cae a ``BOTMAKER_ACCESS_TOKEN``.
+    """
+    return x_botmaker_token
+
+
 def _rango(desde: str | None, hasta: str | None) -> tuple[str, str, bool]:
     """Normaliza el rango de fechas locales a la ventana UTC que pide la API.
 
@@ -79,11 +92,18 @@ def _rango(desde: str | None, hasta: str | None) -> tuple[str, str, bool]:
     return ini_utc.strftime("%Y-%m-%dT%H:%M:%SZ"), fin_utc.strftime("%Y-%m-%dT%H:%M:%SZ"), long_term
 
 
-def _cargar(desde: str | None, hasta: str | None):
+def _cargar(desde: str | None, hasta: str | None, token: str | None = None):
     frm, to, long_term = _rango(desde, hasta)
-    cliente = BotmakerClient()
+    if not token and not os.environ.get("BOTMAKER_ACCESS_TOKEN"):
+        raise HTTPException(
+            status_code=400,
+            detail="Falta el token de Botmaker (header X-Botmaker-Token).",
+        )
+    cliente = BotmakerClient(access_token=token)
     try:
         sesiones = list(cliente.iter_sessions(frm, to, long_term=long_term))
+    except BotmakerAuthError as exc:
+        raise HTTPException(status_code=401, detail=str(exc)) from exc
     except BotmakerError as exc:
         raise HTTPException(status_code=502, detail=f"Botmaker: {exc}") from exc
     filas = construir_filas(sesiones, offset_horas=OFFSET)
@@ -111,9 +131,10 @@ def funnel_daily(
     desde: str | None = Query(None, description="Fecha local inicial YYYY-MM-DD"),
     hasta: str | None = Query(None, description="Fecha local final YYYY-MM-DD (inclusive)"),
     x_api_key: str | None = Depends(_api_key_header),
+    token: str | None = Depends(_botmaker_token),
 ) -> list[dict[str, Any]]:
     verificar_api_key(x_api_key)
-    return agregar_por_dia(_cargar(desde, hasta))
+    return agregar_por_dia(_cargar(desde, hasta, token))
 
 
 @app.get("/funnel/sessions", summary="Detalle por sesion")
@@ -121,9 +142,10 @@ def funnel_sessions(
     desde: str | None = Query(None),
     hasta: str | None = Query(None),
     x_api_key: str | None = Depends(_api_key_header),
+    token: str | None = Depends(_botmaker_token),
 ) -> list[dict[str, Any]]:
     verificar_api_key(x_api_key)
-    return [f.as_dict() for f in _cargar(desde, hasta)]
+    return [f.as_dict() for f in _cargar(desde, hasta, token)]
 
 
 @app.get("/funnel/summary", summary="Totales del periodo y corte por tienda")
@@ -131,9 +153,10 @@ def funnel_summary(
     desde: str | None = Query(None),
     hasta: str | None = Query(None),
     x_api_key: str | None = Depends(_api_key_header),
+    token: str | None = Depends(_botmaker_token),
 ) -> dict[str, Any]:
     verificar_api_key(x_api_key)
-    filas = _cargar(desde, hasta)
+    filas = _cargar(desde, hasta, token)
     return {
         "periodo": dict(zip(("desde", "hasta"), _rango_local(desde, hasta))),
         "totales": agregar_totales(filas),
@@ -147,9 +170,10 @@ def funnel_daily_csv(
     desde: str | None = Query(None),
     hasta: str | None = Query(None),
     x_api_key: str | None = Depends(_api_key_header),
+    token: str | None = Depends(_botmaker_token),
 ) -> StreamingResponse:
     verificar_api_key(x_api_key)
-    datos = agregar_por_dia(_cargar(desde, hasta))
+    datos = agregar_por_dia(_cargar(desde, hasta, token))
     buffer = io.StringIO()
     columnas = list(datos[0].keys()) if datos else ["fecha"]
     escritor = csv.DictWriter(buffer, fieldnames=columnas)
@@ -161,3 +185,16 @@ def funnel_daily_csv(
         media_type="text/csv",
         headers={"Content-Disposition": 'attachment; filename="funnel_diario.csv"'},
     )
+
+
+WEB_DIR = os.path.join(os.path.dirname(__file__), "web")
+
+
+@app.get("/", include_in_schema=False)
+def app_web() -> FileResponse:
+    """Sirve la app: pide token y rango de fechas, y arma el reporte."""
+    return FileResponse(os.path.join(WEB_DIR, "index.html"), media_type="text/html")
+
+
+# Montado al final para que no tape las rutas declaradas arriba.
+app.mount("/", StaticFiles(directory=WEB_DIR), name="web")

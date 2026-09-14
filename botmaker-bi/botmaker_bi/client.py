@@ -18,6 +18,10 @@ class BotmakerError(RuntimeError):
     pass
 
 
+class BotmakerAuthError(BotmakerError):
+    """El token de acceso falta, expiro o no tiene permisos."""
+
+
 class BotmakerClient:
     """Envoltorio minimo sobre los endpoints de Botmaker que alimentan el embudo.
 
@@ -63,6 +67,12 @@ class BotmakerClient:
         # La API responde 204 sin cuerpo cuando el periodo no tiene registros.
         if resp.status_code == 204 or not resp.content:
             return {"items": [], "nextPage": None}
+        if resp.status_code in (401, 403):
+            raise BotmakerAuthError(
+                "Botmaker rechazo el token de acceso (HTTP "
+                f"{resp.status_code}). Revisa que sea el token de "
+                "Integraciones -> API y que siga vigente."
+            )
         if resp.status_code != 200:
             raise BotmakerError(f"HTTP {resp.status_code} en {url}: {resp.text[:300]}")
         return resp.json()

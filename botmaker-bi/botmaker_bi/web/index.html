@@ -1,0 +1,219 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="data:,">
+<title>Reporte de embudo conversacional — Decor Center</title>
+<style>
+:root {
+  color-scheme: light;
+  --plane:          #f9f9f7;
+  --surface-1:      #fcfcfb;
+  --text-primary:   #0b0b0b;
+  --text-secondary: #52514e;
+  --text-muted:     #898781;
+  --grid:           #e1e0d9;
+  --axis:           #c3c2b7;
+  --border:         rgba(11,11,11,0.10);
+  --series-1:       #2a78d6;
+  --series-2:       #eb6834;
+  --series-3:       #1baf7a;
+  --step-1:         #86b6ef;
+  --step-2:         #5598e7;
+  --step-3:         #2a78d6;
+  --step-4:         #1c5cab;
+  --critical:       #d03b3b;
+  --field-bg:       #ffffff;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --plane:          #0d0d0d;
+    --surface-1:      #1a1a19;
+    --text-primary:   #ffffff;
+    --text-secondary: #c3c2b7;
+    --text-muted:     #898781;
+    --grid:           #2c2c2a;
+    --axis:           #383835;
+    --border:         rgba(255,255,255,0.10);
+    --series-1:       #3987e5;
+    --series-2:       #d95926;
+    --series-3:       #199e70;
+    --step-1:         #6da7ec;
+    --step-2:         #3987e5;
+    --step-3:         #256abf;
+    --step-4:         #184f95;
+    --critical:       #d03b3b;
+    --field-bg:       #111110;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --plane:          #0d0d0d;
+  --surface-1:      #1a1a19;
+  --text-primary:   #ffffff;
+  --text-secondary: #c3c2b7;
+  --text-muted:     #898781;
+  --grid:           #2c2c2a;
+  --axis:           #383835;
+  --border:         rgba(255,255,255,0.10);
+  --series-1:       #3987e5;
+  --series-2:       #d95926;
+  --series-3:       #199e70;
+  --step-1:         #6da7ec;
+  --step-2:         #3987e5;
+  --step-3:         #256abf;
+  --step-4:         #184f95;
+  --critical:       #d03b3b;
+  --field-bg:       #111110;
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body {
+  background: var(--plane);
+  color: var(--text-primary);
+  font: 14px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+  padding-block: 32px;
+  padding-inline: 16px;
+}
+.wrap { max-width: 1060px; margin: 0 auto; }
+h1 { font-size: 22px; font-weight: 600; margin: 0 0 4px; letter-spacing: -0.01em; }
+.sub { color: var(--text-secondary); margin: 0 0 24px; }
+.card {
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 20px;
+  margin-bottom: 16px;
+}
+h2 { font-size: 15px; font-weight: 600; margin: 0 0 2px; }
+.cap { color: var(--text-secondary); font-size: 13px; margin: 0 0 18px; }
+
+/* ---- formulario ---- */
+.fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; }
+label { display: block; font-size: 12px; font-weight: 600; color: var(--text-secondary); margin-bottom: 5px; }
+input[type=text], input[type=password], input[type=date] {
+  width: 100%; padding: 9px 11px; font: inherit;
+  color: var(--text-primary); background: var(--field-bg);
+  border: 1px solid var(--axis); border-radius: 7px;
+}
+input:focus-visible { outline: 2px solid var(--series-1); outline-offset: 1px; border-color: transparent; }
+.hint { font-size: 12px; color: var(--text-muted); margin-top: 6px; }
+.presets { display: flex; flex-wrap: wrap; gap: 8px; margin: 16px 0 4px; }
+button {
+  font: inherit; cursor: pointer; border-radius: 7px;
+  border: 1px solid var(--axis); background: var(--surface-1);
+  color: var(--text-primary); padding: 7px 13px;
+}
+button:hover { border-color: var(--series-1); }
+button[aria-pressed=true] { border-color: var(--series-1); color: var(--series-1); font-weight: 600; }
+.primary {
+  background: var(--series-1); border-color: var(--series-1);
+  color: #fff; font-weight: 600; padding: 10px 20px; margin-top: 18px;
+}
+.primary:hover { filter: brightness(1.08); }
+.primary[disabled] { opacity: .55; cursor: progress; }
+details { margin-top: 16px; }
+summary { cursor: pointer; font-size: 13px; color: var(--text-secondary); }
+details > .fields { margin-top: 12px; }
+.check { display: flex; align-items: center; gap: 8px; margin-top: 12px; font-size: 13px; color: var(--text-secondary); }
+.check input { accent-color: var(--series-1); }
+
+.msg { padding: 12px 14px; border-radius: 8px; font-size: 13px; margin-top: 16px; }
+.msg.error { background: color-mix(in srgb, var(--critical) 12%, var(--surface-1)); color: var(--text-primary); border: 1px solid color-mix(in srgb, var(--critical) 45%, transparent); }
+
+/* ---- reporte ---- */
+#reporte[hidden] { display: none !important; }
+.loading { opacity: .45; transition: opacity .15s; }
+.hero-row { display: grid; grid-template-columns: minmax(200px, 1.1fr) 2fr; gap: 24px; align-items: center; }
+.hero-num { font-size: 52px; font-weight: 600; line-height: 1.05; letter-spacing: -0.02em; }
+.hero-lab { color: var(--text-secondary); font-size: 13px; margin-top: 2px; }
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 18px; }
+.tile-v { font-size: 26px; font-weight: 600; letter-spacing: -0.01em; }
+.tile-l { color: var(--text-secondary); font-size: 12px; margin-top: 1px; }
+
+table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; font-size: 13px; }
+th, td { padding: 8px 10px; text-align: right; border-bottom: 1px solid var(--grid); white-space: nowrap; }
+th { color: var(--text-secondary); font-weight: 600; font-size: 12px; }
+th:first-child, td:first-child { text-align: left; }
+tbody tr:last-child td { border-bottom: none; }
+tfoot td { font-weight: 600; border-top: 1px solid var(--axis); border-bottom: none; }
+.scroll-x { overflow-x: auto; }
+
+.legend { display: flex; flex-wrap: wrap; gap: 16px; margin-bottom: 14px; font-size: 12px; color: var(--text-secondary); }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.dot { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
+/* Los gráficos se desplazan en pantallas angostas en vez de encogerse:
+   a 390px un viewBox de 720 dejaría el texto en ~6px. */
+.chart { overflow-x: auto; overflow-y: hidden; padding-block: 4px; }
+.chart svg { min-width: 600px; }
+svg { display: block; width: 100%; height: auto; overflow: visible; }
+.tick { fill: var(--text-muted); font-size: 11px; }
+.vlab { fill: var(--text-secondary); font-size: 11px; font-variant-numeric: tabular-nums; }
+.slab { fill: var(--text-primary); font-size: 12px; }
+.conv { fill: var(--text-secondary); font-size: 11px; }
+.foot { color: var(--text-muted); font-size: 12px; margin-top: 22px; text-align: center; }
+
+@media (max-width: 640px) {
+  .hero-row { grid-template-columns: 1fr; gap: 20px; }
+  .hero-num { font-size: 42px; }
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Reporte de embudo conversacional</h1>
+  <p class="sub">Ingresos al chat, atención y derivación a tienda, desde Botmaker.</p>
+
+  <form class="card" id="form">
+    <h2>Parámetros</h2>
+    <p class="cap">El token no se guarda en el servidor: viaja sólo en esta petición.</p>
+    <div class="fields">
+      <div style="grid-column: 1 / -1">
+        <label for="token">Token de acceso de Botmaker</label>
+        <input type="password" id="token" autocomplete="off" spellcheck="false"
+               placeholder="Pegá aquí el token">
+        <p class="hint">Botmaker → Integraciones → API.</p>
+      </div>
+      <div>
+        <label for="desde">Desde</label>
+        <input type="date" id="desde" required>
+      </div>
+      <div>
+        <label for="hasta">Hasta</label>
+        <input type="date" id="hasta" required>
+      </div>
+    </div>
+
+    <div class="presets" role="group" aria-label="Rangos rápidos">
+      <button type="button" data-preset="semana">Semana pasada</button>
+      <button type="button" data-preset="7">Últimos 7 días</button>
+      <button type="button" data-preset="30">Últimos 30 días</button>
+      <button type="button" data-preset="mes">Mes actual</button>
+    </div>
+
+    <label class="check"><input type="checkbox" id="recordar">
+      Recordar el token mientras la pestaña esté abierta</label>
+
+    <details>
+      <summary>Opciones avanzadas</summary>
+      <div class="fields">
+        <div>
+          <label for="apikey">Clave del servicio (X-API-Key)</label>
+          <input type="password" id="apikey" autocomplete="off"
+                 placeholder="Sólo si el servidor la exige">
+        </div>
+      </div>
+    </details>
+
+    <button type="submit" class="primary" id="btn">Generar reporte</button>
+    <div class="msg error" id="error" hidden></div>
+  </form>
+
+  <div id="reporte" hidden></div>
+</div>
+<script src="app.js"></script>
+</body>
+</html>

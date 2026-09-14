@@ -4,8 +4,10 @@ Extrae de Botmaker cuántas personas entran al chat, cuántas llegan a atención
 humana, cuántas son atendidas y cuántas terminan derivadas a una tienda, con el
 porcentaje de conversión entre etapas.
 
-Se expone de dos formas, pensadas para convivir:
+Se expone de tres formas, pensadas para convivir:
 
+* **App web** (`botmaker_bi/web/`) — pide el token y el rango de fechas, y arma
+  el reporte en pantalla. Es la vía para quien no toca SQL ni Power BI.
 * **Endpoint REST** (`botmaker_bi/api.py`) — consulta directa desde Power BI.
 * **Cargador incremental** (`botmaker_bi/cli.py` + `sql/`) — persiste en SQL
   Server con `MERGE` idempotente.
@@ -74,30 +76,52 @@ python -m botmaker_bi.cli tabla --desde 2026-09-07 --hasta 2026-09-13
 
 Sin `--desde/--hasta` toma la semana pasada completa (lunes a domingo).
 
-### Levantar el endpoint
+### Levantar la app y el endpoint
 
 ```bash
 uvicorn botmaker_bi.api:app --host 0.0.0.0 --port 8080
 ```
 
+Abriendo `http://localhost:8080/` aparece la app: un campo para el token, el
+rango de fechas (con atajos de semana pasada / últimos 7 y 30 días / mes
+actual) y el botón que arma el reporte —número de conversión global, tarjetas
+de cada etapa, embudo, evolución diaria, tabla y derivaciones por tienda, con
+descarga a CSV.
+
+El token **no se guarda en el servidor**: viaja en el header
+`X-Botmaker-Token` de esa petición y se usa para llamar a Botmaker. En el
+navegador sólo se guarda si se marca "recordar", y en `sessionStorage`, que
+muere al cerrar la pestaña. Así cada persona usa su propio token sin que el
+servicio almacene credenciales de nadie.
+
+Si en cambio se define `BOTMAKER_ACCESS_TOKEN` en el servidor, el campo puede
+quedar vacío y se usa ese token para todas las consultas.
+
 | Ruta | Devuelve |
 |---|---|
+| `GET /` | La app web. |
 | `GET /funnel/daily` | Una fila por día (grano del dashboard). |
 | `GET /funnel/daily.csv` | Lo mismo en CSV. |
 | `GET /funnel/sessions` | Una fila por sesión (detalle). |
 | `GET /funnel/summary` | Totales + corte por tienda + serie diaria. |
 | `GET /health` | Chequeo de vida. |
 
-Todas aceptan `?desde=YYYY-MM-DD&hasta=YYYY-MM-DD` en fecha **local** y exigen
-el header `X-API-Key` si `BI_API_KEY` está definida. La documentación
-interactiva queda en `/docs`.
+Todas las rutas `/funnel/*` aceptan `?desde=YYYY-MM-DD&hasta=YYYY-MM-DD` en
+fecha **local** (por defecto, la semana pasada), toman el token en
+`X-Botmaker-Token` y exigen además el header `X-API-Key` si `BI_API_KEY` está
+definida. La documentación interactiva queda en `/docs`.
+
+Los gráficos son SVG generados en el navegador, sin librerías externas ni CDN.
+La paleta está validada para daltonismo y modo oscuro, y todo valor graficado
+aparece también en la tabla.
 
 ### Conectar Power BI
 
 *Obtener datos → Web → Avanzadas*:
 
 * URL: `https://TU-HOST/funnel/daily?desde=2026-09-07&hasta=2026-09-13`
-* Encabezado: `X-API-Key` con el valor de `BI_API_KEY`
+* Encabezados: `X-Botmaker-Token` con el token de Botmaker y, si el servidor la
+  exige, `X-API-Key` con el valor de `BI_API_KEY`
 
 La respuesta es una lista JSON plana, sin envoltorio, para que el conector la
 reconozca como tabla sin pasos de transformación extra.
