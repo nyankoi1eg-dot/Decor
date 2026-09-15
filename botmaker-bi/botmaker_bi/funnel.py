@@ -57,9 +57,10 @@ EVENTO_COLA = "queue-set"
 EVENTO_ASIGNACION = "assigned-to-agent"
 EVENTO_CIERRE = "conversation-close"
 
-# Botmaker no documenta con que nombre viaja el operador dentro de ``info``.
-# Se prueban los candidatos en orden y gana el primero con contenido.
-CLAVES_OPERADOR = ("operatorName", "operator", "agentName", "agent",
+# Verificado contra la API (sept-2026): los tres eventos traen ``agentName`` y
+# ``agentId``. Se prueban los candidatos en orden y gana el primero con
+# contenido; los demas quedan como respaldo por si Botmaker cambia el esquema.
+CLAVES_OPERADOR = ("agentName", "operatorName", "operator", "agent",
                    "userName", "user", "closedBy", "by", "email")
 #: Idem para el agente al que se asigno el chat (evento ``assigned-to-agent``).
 CLAVES_AGENTE = ("agentName", "agent", "operatorName", "operator",

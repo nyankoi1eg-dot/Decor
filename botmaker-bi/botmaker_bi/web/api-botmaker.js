@@ -16,8 +16,9 @@ const SIN_GESTOR = '(sin gestor identificado)';
 const EVENTO_COLA = 'queue-set';
 const EVENTO_ASIGNACION = 'assigned-to-agent';
 const EVENTO_CIERRE = 'conversation-close';
-/* Botmaker no documenta con qué nombre viaja el operador dentro de info. */
-const CLAVES_OPERADOR = ['operatorName', 'operator', 'agentName', 'agent',
+/* Verificado contra la API (sept-2026): los tres eventos traen agentName y
+ * agentId. Los demás quedan de respaldo por si cambia el esquema. */
+const CLAVES_OPERADOR = ['agentName', 'operatorName', 'operator', 'agent',
   'userName', 'user', 'closedBy', 'by', 'email'];
 const CLAVES_AGENTE = ['agentName', 'agent', 'operatorName', 'operator',
   'userName', 'user', 'assignedTo', 'to', 'email'];
