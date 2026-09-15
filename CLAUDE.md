@@ -6,8 +6,7 @@ Todo en `botmaker/asesores-web/`. **Leer `HANDOFF.md` antes de tocar nada**: doc
 el estado del análisis, las rarezas de la API y las decisiones ya tomadas con el canal.
 
 - `HANDOFF.md` — estado, reglas de clasificación, hallazgos y preguntas abiertas
-- `CONVERSACION.md` — la conversación completa que originó el análisis
-- `scripts/` — descarga y clasificación reproducibles
+- `scripts/` — descarga, lectura de mensajes y clasificación reproducibles
 - `datos/` — cifras agregadas por período
 
 Reporte publicado: https://claude.ai/code/artifact/fcc35ab3-c51b-4e63-8a45-e3274a875293
@@ -25,14 +24,25 @@ Reporte publicado: https://claude.ai/code/artifact/fcc35ab3-c51b-4e63-8a45-e3274
   contacto, llega hasta 2022).
 - Perú es UTC−5 fijo.
 - Los chats sin `queueId` igual son de Asesores Web.
+- Al deduplicar entre pasadas, conservar la copia **más reciente**: los tags se
+  siguen agregando después de la conversación.
+- Para leer mensajes el parámetro es `chat-id`. `chatId` se acepta y **se ignora**,
+  devolviendo el flujo global del período — error silencioso.
+- Un 401 a mitad de trabajo no es expiración: el token vence en 2031. Es límite
+  de volumen, y se recupera solo.
 
 ### Al reportar sobre estos datos
 
-El vocabulario real de tags y tipificaciones **no coincide con el manual del canal**:
-faltan cinco de los siete tags, las variables `U.TDA.*` no existen y el 94% de las
-tipificaciones está fuera de lo documentado. No mapear a las categorías del manual sin
-verificar contra el inventario real, y no rellenar con estimaciones lo que el registro
-no tiene: va a un cubo explícito de dato ciego.
+El vocabulario real **no coincide con el manual**: faltan cinco de los siete tags,
+las variables `U.TDA.*` no existen y el 71% de los cierres usa tipificaciones que el
+manual no define. Solo vale lo que está en el manual; lo demás no clasifica.
+
+**La API no devuelve todos los tags que muestra la consola**, así que clasificar solo
+por tags subestima. Donde el tag no explica el cierre, leer los mensajes del chat
+(`scripts/leer_mensajes.py`).
+
+No rellenar con estimaciones lo que el registro no tiene: va a un cubo explícito de
+dato ciego.
 
 ## Otros
 

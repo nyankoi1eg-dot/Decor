@@ -48,11 +48,19 @@ def cargar_union(patron="raw_*.json"):
     La paginación de la API no es determinística: dos recorridos completos e
     independientes devuelven conjuntos distintos. Por eso se descarga varias
     veces y se toma la unión.
+
+    Ante duplicados se conserva la versión MÁS RECIENTE de cada chat. Los tags
+    y la tipificación se siguen agregando después de la conversación, así que
+    quedarse con la primera copia leída deja datos viejos.
     """
     union = {}
     for archivo in sorted(glob.glob(patron)):
         for chat in json.load(open(archivo, encoding="utf-8")):
-            union.setdefault(chat["chat"]["chatId"], chat)
+            cid = chat["chat"]["chatId"]
+            previo = union.get(cid)
+            if previo is None or (parse_ts(chat["lastSessionCreationTime"])
+                                  >= parse_ts(previo["lastSessionCreationTime"])):
+                union[cid] = chat
     return union
 
 
@@ -79,3 +87,21 @@ def etiquetas_norm(chat):
 def tiendas(chat):
     """Las tiendas son tags con prefijo TDA/UTDA, no variables U.TDA.*."""
     return [t for t in etiquetas(chat) if t.upper().startswith(("TDA", "UTDA"))]
+
+
+def es_sac(chat):
+    """Tráfico de postventa: no pertenece al canal Asesores Web."""
+    return chat.get("queueId") == "SAC" or "Asesores_SAC" in etiquetas(chat)
+
+
+def mensajes_url(chat_id, desde, hasta):
+    """URL para leer los mensajes de UN chat.
+
+    El parámetro es `chat-id`. `chatId` se acepta sin error pero se ignora, y
+    la respuesta trae el flujo global de mensajes del período — 1500 mensajes
+    de cientos de chats distintos, idénticos para cualquier chat que se pida.
+    """
+    import urllib.parse
+    q = urllib.parse.urlencode({"chat-id": chat_id, "long-term-search": "true",
+                                "from": desde, "to": hasta})
+    return f"https://api.botmaker.com/v2.0/messages?{q}"

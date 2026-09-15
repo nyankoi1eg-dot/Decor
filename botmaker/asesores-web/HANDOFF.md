@@ -1,117 +1,156 @@
-# Canal Asesores Web — reporte de leads (Botmaker)
+# Canal Asesores Web — análisis de leads (Botmaker)
 
-Estado del análisis al 11-sep-2026, para retomar en una sesión nueva.
+Estado al 15-sep-2026. **Leer esto antes de tocar nada.**
 
-Reporte publicado: https://claude.ai/code/artifact/fcc35ab3-c51b-4e63-8a45-e3274a875293
+Reportes publicados:
+- [Leads 1–10 sep](https://claude.ai/code/artifact/fcc35ab3-c51b-4e63-8a45-e3274a875293)
+- [Cómo terminaron los chats · semana 7–13 sep](https://claude.ai/code/artifact/b3a108a0-94d9-4ff8-aa00-2a3d6feafc21)
 
 ## Para retomar
 
 ```bash
 cd botmaker/asesores-web/scripts
-python descargar.py 2026-09-01 2026-09-10 3   # 3 pasadas: la paginación no es determinística
-python clasificar.py 2026-09-01 2026-09-10
+python descargar.py 2026-09-07 2026-09-13 3    # 3 pasadas
+python leer_mensajes.py 2026-09-07 2026-09-13  # deja mensajes.json
+python reporte_semanal.py 2026-09-07 2026-09-13
 ```
 
-La credencial la inyecta el proxy en la cabecera `access-token`. **El campo Prefijo
-debe estar vacío**: si tiene `Bearer`, la API devuelve 401 y el `Reason-Phrase` de la
-respuesta muestra el token con `Bearer` adelante. Se corrige en
-claude.ai/code → selector de entorno → engranaje → Credenciales de API.
+## Credencial
 
-## Cómo consultar la API
+La inyecta el agent proxy en la cabecera `access-token`, **sin prefijo**. Si el
+prefijo tiene `Bearer`, la API responde 401 y el `Reason-Phrase` muestra el token
+contaminado — comparar su longitud delata el problema (347 con prefijo, 340 sin él).
 
-- Endpoint `GET /v2.0/chats`, parámetros `from` / `to` **más** `long-term-search=true`
-  (sin ese último devuelve 400). Se pagina siguiendo `nextPage` hasta que venga vacío;
-  hay páginas intermedias con 0 items que **no** significan el final.
-- Filtrar por `lastSessionCreationTime`, **no** por `creationTime`: este último es la
-  fecha de alta del contacto y llega hasta 2022 para clientes que ya habían escrito.
-- Perú es UTC−5 fijo. Se descarga una ventana UTC más amplia y se recorta en local.
-- **La paginación no es determinística.** Dos recorridos completos e independientes
-  devolvieron conjuntos distintos: 4 chats en uno y ausentes del otro, 1 al revés.
-  Por eso se descarga varias veces y se une por `chatId`.
+**No existe editar una credencial: se borra y se crea de nuevo.** Está en el
+diálogo de edición del entorno (no el de creación), bajo *Environment variables*,
+en la sección *API credentials*. Requiere plan Pro o Max y rol de owner.
+
+Un 401 a mitad de trabajo **no significa que el token expiró**. El token en uso
+tiene `exp` en 2031. El patrón observado —funciona, falla tras una ráfaga larga,
+se recupera solo más tarde— es de límite de volumen. Por eso `leer_mensajes.py`
+espacia las llamadas.
+
+## Trampas de la API
+
+- `GET /v2.0/chats` exige `long-term-search=true` junto con `from`/`to`, o da 400.
+- **Paginación no determinística.** Dos recorridos completos devuelven conjuntos
+  distintos. Hay que hacer varias pasadas y unir por `chatId`. Ninguna cifra de
+  total es definitiva con una sola pasada.
+- Filtrar por `lastSessionCreationTime`, nunca por `creationTime` (fecha de alta
+  del contacto, llega hasta 2022).
+- **Al deduplicar, conservar la copia más reciente.** Los tags se siguen agregando
+  después de la conversación; quedarse con la primera copia leída deja datos viejos.
+- Para leer mensajes el parámetro es **`chat-id`**. `chatId` se acepta sin error y
+  **se ignora**, devolviendo el flujo global del período — 1500 mensajes idénticos
+  para cualquier chat que se pida. Es un error silencioso y fácil de no notar.
+- Perú es UTC−5 fijo.
+- Descargar **después** de que cierre la semana, no durante: los tags siguen
+  cambiando y la foto envejece.
 
 ## Alcance
 
-- Denominador: **todos** los chats del período, no solo los que traen tag.
-- El número retirado **+51 993 313 227** (`channelId` `decorcenter-whatsapp-51993313227`)
-  se separa del funnel y se reporta aparte.
-- Los chats sin `queueId` **sí son** de Asesores Web: llevan `Asesores_Venta`,
-  `CONTACTADO` y `ABANDONO_DE_COMPRA`. Excluirlos sería un error — `queueId` no
-  siempre se persiste.
+- Denominador: todos los chats del período.
+- Fuera del conteo: **cola SAC** (`queueId == "SAC"` o tag `Asesores_SAC`) y el
+  **número retirado +51 993 313 227** (`channelId` `...51993313227`). Se reportan aparte.
+- Los chats sin `queueId` **sí son** de Asesores Web.
 
-## Regla de desenlace
+## Clasificación
 
-El tag define la etapa; la tipificación explica el desenlace y lo determina cuando no
-hay tag de estado. Orden de prioridad:
-
-1. **Compró** — gana sobre cualquier otro estado, y ahí termina
-2. **Solicita ubicación** — prioridad sobre el tag, salvo que haya comprado
-3. **Derivado**
-4. **Abandono de compra** — se desglosa por tipificación en una subsección
-5. Resto de tipificaciones
-6. Solo contactado
-7. Sin tag ni tipificación — dato ciego
-
-## Resultados del período 1–10 sep 2026
-
-Cifras completas en `datos/resultados-2026-09-01_10.json`.
+Tres bloques por cómo terminó el chat:
 
 | | |
 |---|---|
-| Total recuperado | 825 |
-| Número vigente | 791 |
-| Número antiguo | 34 |
-| **Cuadre** | **exacto** |
+| **A** | Terminados por el bot, nunca entraron al funnel |
+| **B** | No son leads comerciales (Eje 3 del manual) |
+| **C** | Con intención de compra — y cómo terminó |
 
-Desenlaces: Abandono 504 · Derivado 137 · Compró 15 · Solicita ubicación 22 ·
-Sin tag ni tipificación 39 · resto 74.
+**La tipificación explica el cierre; cuando no lo explica, manda el tag de mayor
+peso.** Los hechos que registra el gestor —una compra, una tienda asignada— pesan
+más que cualquier etiqueta.
 
-**Hallazgo principal — la pauta no convierte.** De los leads comerciales, 316 vienen de
-click-to-WhatsApp y 268 son orgánicos:
+**Solo vale el vocabulario del manual.** Un tag o tipificación que no figure ahí
+no clasifica.
 
-| | Pauta | Orgánico |
+**El eje de intención sale de la sección 5:** el botón «Realizar una compra»
+dispara `CONTACTADO`, así que llevar ese tag es haber declarado intención.
+
+### Dos equivalencias aplicadas
+
+Sin ellas la derivación daría cero, porque ninguna existe con el nombre del manual:
+
+- `DERIVADOS` se cuenta como `DERIVADOS_A_TIENDA`
+- los tags `TDA*` se cuentan como la variable `U.TDA.*` de la sección 6
+
+## Por qué hace falta leer los mensajes
+
+**La API no devuelve todos los tags que muestra la consola.** Verificado sobre dos
+chats que en pantalla llevan `TAG_LOCALIZAR_TIENDA` y por API sólo traen
+`Asesores_Venta`. En 1842 chats ese tag aparece 2 veces y `DERIVADO_PERO_NO_COMPRO`
+ninguna, cuando el manual lo lista como uno de los siete del funnel.
+
+Leer los mensajes cambió dos bloques enteros:
+
+- de 38 chats "terminados por el bot", **30 pedían comprar**
+- de 228 abandonos sin motivo, **144 pedían comprar**
+
+## `Lead_NO_calificado` — no usarla
+
+Cubre el 71% de los cierres y **no está en el manual**. No significa "no quería
+comprar": leyendo los mensajes de los 232 de una semana, **141 pedían comprar**.
+
+La diferencia real con `Lead_Calificado` no es intención sino **derivación**:
+
+| | No calificado | Calificado |
 |---|---|---|
-| Derivación | 4.7% | 47.8% |
-| Cierre | **0%** | 11.7% |
-| Abandono | 95.3% | 48.9% |
+| `ABANDONO_DE_COMPRA` | 98% | 4% |
+| `DERIVADOS` | 0% | 88% |
+| Tag de tienda | 0% | 97% |
 
-Las 15 compras del período son **todas orgánicas**. No es artefacto de medición: ambos
-grupos tienen operador asignado casi por igual (362/390 contra 395/401) y el referral
-aparece los diez días. La diferencia está en la tipificación — 289 de 390 chats con
-referral cierran como `Lead_NO_calificado`.
+La aplican 3 operadores reales, 232 veces por semana. El canal dice no usarla.
 
-## Lo que el registro no permite medir
+## Resultados · semana 7–13 sep
 
-- **Cinco de los siete tags del manual no existen.** `EN_ATENCIÓN`,
-  `DERIVADO_PERO_NO_COMPRO` y `RECOMPRA` tienen cero ocurrencias — por eso dos de las
-  seis tasas de la sección 9 no se pueden calcular. `DERIVADOS_A_TIENDA` y
-  `CLIENTE_COMPRO` aparecen solo como `DERIVADOS` y `Cliente compro`.
-- **Las variables `U.TDA.*` no existen.** Las tiendas se marcan como tags
-  (`TDAMOLINA`, `TDASALAVERRY`…). `UTDACORPORATIVO` no está en el manual.
-- **El 94% de las tipificaciones está fuera del manual**: 548 de 584 leads cierran con
-  `Lead_Calificado` o `Lead_NO_calificado`, que no figuran en las diez documentadas.
-- **13 derivaciones sin tag.** Chats con tag de tienda, operador y notas pero sin
-  `DERIVADOS`: la tasa de derivación es un piso.
-- **9 de las 15 compras no tienen tag de derivación** — venta registrada sin el paso previo.
-- **3 chats con `Sin_respuesta`**, que es exclusiva de la cola SAC y no debe aparecer acá.
-- **Hueco del 5 de septiembre**: 5 chats contra 43–159 los demás días. Sin resolver.
-- **825 es un piso, no un total certificado** (ver paginación no determinística).
+Cifras completas en `datos/resultados-2026-09-07_13.json`.
+
+516 recuperados = 467 Asesores Web + 26 SAC + 23 número antiguo. **Cuadra.**
+
+| Bloque | n | % |
+|---|---|---|
+| C · Con intención de compra | 373 | 79.9% |
+| B · No comerciales | 87 | 18.6% |
+| A · Terminados por el bot | 7 | 1.5% |
+
+**Embudo:** 467 ingresaron → 406 `CONTACTADO` (86.9%) → *atención: ciego* →
+106 derivados (26.1%) → **11 compras** (10.4%). Conversión total 2.36%.
+
+**El hallazgo:** 171 chats pidieron comprar y se perdieron sin motivo registrado
+ni derivación. No es un problema de calidad de lead, es de atención.
+
+**Pauta:** 49% del bloque C viene de anuncio, y **ninguna de las 11 compras**.
+Dos períodos seguidos con el mismo resultado.
+
+## Datos ciegos
+
+- `EN_ATENCIÓN`, `RECOMPRA` y `DERIVADO_PERO_NO_COMPRO`: **cero usos**. Dos de las
+  seis tasas de la sección 9 no se pueden calcular, y el tramo contacto→derivación
+  —donde se pierden 300 leads— no se puede diagnosticar.
+- Las variables `U.TDA.*` no existen; las tiendas son tags.
+- `UTDACORPORATIVO` no está en la sección 6 del manual.
+- 86 de 493 chats no devuelven ni un mensaje del cliente pese a tener `CONTACTADO`.
+- `PENDIENTE DE COMPRA` (95 usos) describe una etapa real que el manual no
+  contempla. Si el equipo lo usa para marcar leads vivos, conviene incorporarlo.
 
 ## Preguntas abiertas
 
-1. **¿Qué significa `Lead_NO_calificado`?** Explica 400 de los 504 abandonos y no está
-   documentado. Si es "sin intención de compra", "sin presupuesto" o "fuera del público
-   objetivo" cambia la lectura del canal, sobre todo la del tráfico pago. Lo sabe el
-   equipo de gestores, no la API.
-2. **`NOPRODUCTO` es ambiguo** — ¿"producto sin stock" o "no tenemos ese producto"?
-   Son cosas distintas para el hallazgo de catálogo.
-3. **¿Las tipificaciones de no-lead deben ganarle al tag, como `SolicitaUbicación`?**
-   Hoy 38 `CATEGORIIA` + 30 `Consulta_atendida` + 3 `Propaganda` caen dentro de los 504
-   abandonos porque llevan el tag `ABANDONO_DE_COMPRA`. Son 71 chats.
-4. **Nombres oficiales de las tipificaciones.** Los de este análisis son una lectura de
-   los slugs, no el nombre de la consola.
+1. **¿Por qué la API no devuelve todos los tags?** Mientras siga así, cualquier
+   clasificación basada solo en tags está subestimada.
+2. **`NOPRODUCTO` es ambiguo** — ¿"sin stock" o "no existe"? Cambia el hallazgo
+   de catálogo.
+3. **El pico de jueves a domingo.** De los chats sin atender, 31 de 32 caen ahí.
+   ¿Caída del bot, cola sin cubrir, o gestores sin cobertura de fin de semana?
 
 ## Nota sobre los datos
 
-Este directorio guarda **solo cifras agregadas y scripts**. Los chats crudos incluyen
-teléfonos y nombres de clientes y no se versionan: se vuelven a descargar con
-`descargar.py`. El `.gitignore` cubre `raw_*.json`.
+Este directorio guarda **solo cifras agregadas y scripts**. Los chats crudos y los
+mensajes incluyen teléfonos y nombres de clientes y no se versionan: se vuelven a
+descargar. El `.gitignore` cubre `raw_*.json` y `mensajes.json`.

@@ -13,3 +13,5 @@ gha-creds-*.json
 # Datos crudos de Botmaker: contienen datos personales de clientes.
 botmaker/**/raw_*.json
 botmaker/**/resultados.json
+botmaker/**/mensajes.json
+botmaker/**/all_msgs.json

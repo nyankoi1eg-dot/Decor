@@ -1,0 +1,154 @@
+{
+ "periodo": [
+  "2026-09-07",
+  "2026-09-13"
+ ],
+ "zona_horaria": "America/Lima (UTC-5), sobre lastSessionCreationTime",
+ "metodo": "Manual de Tags + lectura de mensajes donde el tag no explica el cierre",
+ "totales": {
+  "recuperados_api": 516,
+  "asesores_web": 467,
+  "cola_sac_excluida": 26,
+  "numero_antiguo_excluido": 23
+ },
+ "bloques": {
+  "C": 373,
+  "B": 87,
+  "A": 7
+ },
+ "desenlaces": {
+  "C": {
+   "Pidió comprar y se perdió, sin motivo registrado": 145,
+   "Derivado a tienda": 96,
+   "Abandono sin mensajes recuperables": 53,
+   "Abandono tras saludo o clic, sin pedir nada": 28,
+   "Pidió comprar, nunca fue atendido": 26,
+   "Compró": 11,
+   "Abandono — Lead no responde": 5,
+   "Abandono — Producto sin stock (etiqueta ambigua)": 4,
+   "Abandono — Sin diseño de producto": 2,
+   "Contactado, sin avanzar de etapa": 2,
+   "Abandono — Producto descontinuado": 1
+  },
+  "B": {
+   "Preguntan por otra categoría o producto": 32,
+   "Consulta atendida": 20,
+   "Propaganda / spam": 19,
+   "Solicita ubicación": 9,
+   "Solicita ubicación u horario": 4,
+   "Consulta de postventa": 3
+  },
+  "A": {
+   "El cliente no escribió nada": 6,
+   "Solo saludo o clic, sin pedir nada": 1
+  }
+ },
+ "embudo": {
+  "ingresaron": 467,
+  "contactado": 406,
+  "en_atencion": 0,
+  "derivados": 106,
+  "compraron": 11,
+  "nota_en_atencion": "EN_ATENCIÓN no se usa: el peldaño es ciego"
+ },
+ "tiendas": {
+  "La Molina": {
+   "derivados": 24,
+   "compras": 4
+  },
+  "Salaverry": {
+   "derivados": 21,
+   "compras": 3
+  },
+  "Argentina": {
+   "derivados": 17,
+   "compras": 1
+  },
+  "Rep. Panamá": {
+   "derivados": 13,
+   "compras": 1
+  },
+  "Palao": {
+   "derivados": 11,
+   "compras": 0
+  },
+  "Piura": {
+   "derivados": 6,
+   "compras": 0
+  },
+  "Trujillo": {
+   "derivados": 4,
+   "compras": 1
+  },
+  "Arequipa": {
+   "derivados": 4,
+   "compras": 0
+  },
+  "Ica": {
+   "derivados": 2,
+   "compras": 0
+  },
+  "Corporativo": {
+   "derivados": 2,
+   "compras": 0
+  },
+  "Chiclayo": {
+   "derivados": 2,
+   "compras": 0
+  },
+  "Huancayo": {
+   "derivados": 1,
+   "compras": 0
+  }
+ },
+ "origen_pauta": {
+  "C": {
+   "con_referral": 182,
+   "total": 373
+  },
+  "B": {
+   "con_referral": 22,
+   "total": 87
+  },
+  "A": {
+   "con_referral": 5,
+   "total": 7
+  }
+ },
+ "compras_de_pauta": 0,
+ "por_dia": {
+  "2026-09-07": {
+   "total": 146,
+   "compras": 1
+  },
+  "2026-09-08": {
+   "total": 77,
+   "compras": 5
+  },
+  "2026-09-09": {
+   "total": 72,
+   "compras": 0
+  },
+  "2026-09-10": {
+   "total": 73,
+   "compras": 4
+  },
+  "2026-09-11": {
+   "total": 55,
+   "compras": 1
+  },
+  "2026-09-12": {
+   "total": 24,
+   "compras": 0
+  },
+  "2026-09-13": {
+   "total": 20,
+   "compras": 0
+  }
+ },
+ "cuadre": {
+  "suma": 516,
+  "total_api": 516,
+  "cuadra": true
+ }
+}
