@@ -8,6 +8,9 @@
 
     # ver el embudo por consola sin tocar la base
     python -m botmaker_bi.cli tabla --desde 2026-09-07 --hasta 2026-09-13
+
+    # sin API: sobre un JSON crudo ya exportado (mismo cuerpo que GET /sessions)
+    python -m botmaker_bi.cli tabla --crudo botmaker_crudo_2026-09-07_a_2026-09-13.json
 """
 from __future__ import annotations
 
@@ -19,7 +22,13 @@ import os
 import sys
 
 from .client import BotmakerClient
-from .funnel import agregar_por_dia, agregar_por_tienda, agregar_totales, construir_filas
+from .funnel import (
+    agregar_por_dia,
+    agregar_por_gestor,
+    agregar_por_tienda,
+    agregar_totales,
+    construir_filas,
+)
 
 log = logging.getLogger("botmaker_bi")
 DIAS_SIN_LONG_TERM = 7
@@ -41,7 +50,33 @@ def _defaults() -> tuple[str, str]:
     return inicio.isoformat(), (inicio + dt.timedelta(days=6)).isoformat()
 
 
-def _obtener_filas(desde: str, hasta: str, offset: int):
+def _leer_crudo(ruta: str) -> list[dict]:
+    """Lee un volcado crudo de ``GET /v2.0/sessions``.
+
+    Acepta el envoltorio ``{desde, hasta, total, items[]}`` que produce una
+    exportacion manual, y tambien una lista pelada de sesiones. Es la via para
+    trabajar sin API, cuando la red del entorno no llega a Botmaker.
+    """
+    with open(ruta, encoding="utf-8") as fh:
+        datos = json.load(fh)
+    if isinstance(datos, dict):
+        sesiones = datos.get("items")
+        if sesiones is None:
+            raise SystemExit(f"{ruta}: se esperaba la clave 'items' con las sesiones")
+    elif isinstance(datos, list):
+        sesiones = datos
+    else:
+        raise SystemExit(f"{ruta}: formato no reconocido (ni objeto con 'items' ni lista)")
+    if sesiones and not isinstance(sesiones[0], dict):
+        raise SystemExit(f"{ruta}: 'items' no contiene objetos de sesion")
+    log.info("Leidas %s sesiones de %s", len(sesiones), ruta)
+    return sesiones
+
+
+def _obtener_filas(desde: str, hasta: str, offset: int, crudo: str | None = None):
+    if crudo:
+        filas = construir_filas(_leer_crudo(crudo), offset_horas=offset)
+        return [f for f in filas if desde <= f.fecha_local <= hasta]
     frm, to, long_term = _ventana_utc(desde, hasta, offset)
     log.info("Consultando Botmaker %s -> %s (long_term=%s)", frm, to, long_term)
     cliente = BotmakerClient()
@@ -61,6 +96,15 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--hasta", default=fin_def, help=f"Fecha local final (def. {fin_def})")
     parser.add_argument("--salida", help="Archivo JSON de salida para 'extraer'")
     parser.add_argument(
+        "--crudo",
+        help="Lee las sesiones de un JSON ya exportado en vez de llamar a la API",
+    )
+    parser.add_argument(
+        "--excluir-sin-cerrar",
+        action="store_true",
+        help="Descarta las sesiones todavia abiertas (los ultimos dias son provisionales)",
+    )
+    parser.add_argument(
         "--offset",
         type=int,
         default=int(os.environ.get("BI_TIMEZONE_OFFSET", "-5")),
@@ -68,7 +112,15 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
 
-    filas = _obtener_filas(args.desde, args.hasta, args.offset)
+    filas = _obtener_filas(args.desde, args.hasta, args.offset, args.crudo)
+    abiertas = sum(not f.cerrado for f in filas)
+    if args.excluir_sin_cerrar:
+        filas = [f for f in filas if f.cerrado]
+        log.info("Excluidas %s sesiones sin cerrar", abiertas)
+    elif abiertas:
+        log.warning(
+            "%s de %s sesiones siguen abiertas: los ultimos dias son provisionales "
+            "(--excluir-sin-cerrar para dejarlas fuera)", abiertas, len(filas))
 
     if args.comando == "extraer":
         datos = [f.as_dict() for f in filas]
@@ -99,8 +151,25 @@ def main(argv: list[str] | None = None) -> int:
     print(" | ".join(c.rjust(12) for c in cols))
     for r in diario:
         print(" | ".join(str(r[c]).rjust(12) for c in cols))
-    print("\nTOTALES:", json.dumps(agregar_totales(filas), ensure_ascii=False))
-    print("POR TIENDA:", json.dumps(agregar_por_tienda(filas), ensure_ascii=False))
+    total = agregar_totales(filas)
+    print("\nTOTALES:", json.dumps(total, ensure_ascii=False))
+
+    tiendas = agregar_por_tienda(filas)
+    print("\nPOR TIENDA")
+    for t in tiendas:
+        print(f"  {t['tienda']:32} {t['derivaciones']:>5}")
+    # Este total es la comprobacion de que el corte por tienda cuadra con el
+    # embudo: antes se contaban pares (sesion x tag) y daba de mas.
+    suma = sum(t["derivaciones"] for t in tiendas)
+    print(f"  {'TOTAL':32} {suma:>5}"
+          + ("" if suma == total["derivados_tienda"]
+             else f"  <-- NO CUADRA con derivados={total['derivados_tienda']}"))
+
+    print("\nPOR GESTOR")
+    for g in agregar_por_gestor(filas):
+        print(f"  {g['gestor']:32} atendidos={g['atendidos']:>5}"
+              f"  derivados={g['derivados_tienda']:>5}"
+              f"  conv={g['pct_atendido_a_tienda']}%")
     return 0
 
 

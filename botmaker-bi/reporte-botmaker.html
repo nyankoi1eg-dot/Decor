@@ -142,6 +142,14 @@ th:first-child, td:first-child { text-align: left; }
 tbody tr:last-child td { border-bottom: none; }
 tfoot td { font-weight: 600; border-top: 1px solid var(--axis); border-bottom: none; }
 .scroll-x { overflow-x: auto; }
+.tabs { display: flex; flex-wrap: wrap; gap: 8px; }
+.tab { display: inline-flex; align-items: center; gap: 7px; }
+.tabn { color: var(--text-muted); font-variant-numeric: tabular-nums; font-size: 12px; }
+.tab[aria-pressed=true] .tabn { color: inherit; }
+/* Marca de dato provisional o no aditivo. */
+.prov { color: var(--critical); font-weight: 600; margin-left: 2px; cursor: help; }
+.noadit { cursor: help; }
+.nota { color: var(--text-muted); font-size: 12px; margin: 12px 0 0; line-height: 1.5; }
 
 .legend { display: flex; flex-wrap: wrap; gap: 16px; margin-bottom: 14px; font-size: 12px; color: var(--text-secondary); }
 .legend span { display: inline-flex; align-items: center; gap: 6px; }
@@ -402,52 +410,92 @@ function tablaDiaria(dias, t) {
     ['% Global', (d) => pct(d.pct_conversion_global)],
   ];
   const th = cols.map((c) => `<th>${esc(c[0])}</th>`).join('');
-  const tb = dias.map((d) => '<tr>' + cols.map((c) => `<td>${esc(c[1](d))}</td>`).join('') + '</tr>').join('');
+  const tb = dias.map((d) => {
+    // Un día con sesiones abiertas todavía puede cambiar: se marca provisional.
+    const marca = d.provisional ? `<span class="prov" title="${esc(fmt(d.sin_cerrar) + ' sesiones sin cerrar: la cifra puede cambiar')}">*</span>` : '';
+    return '<tr>' + cols.map((c, i) =>
+      `<td>${esc(c[1](d))}${i === 0 ? marca : ''}</td>`).join('') + '</tr>';
+  }).join('');
+  // personas_unicas NO se totaliza: sumar la columna cuenta dos veces a quien
+  // escribe dos días. Se muestra el distinct del período, marcado.
+  const sumaUnicas = dias.reduce((a, d) => a + d.personas_unicas, 0);
   const tf = '<tr><td>Total</td><td></td>' +
-    [t.ingresos, t.personas_unicas, t.en_cola, t.atendidos, t.derivados_tienda].map((v) => `<td>${fmt(v)}</td>`).join('') +
+    `<td>${fmt(t.ingresos)}</td>` +
+    `<td class="noadit" title="${esc('Distinto del período. No es la suma de la columna (' + fmt(sumaUnicas) + ').')}">${fmt(t.personas_unicas)}<span class="prov">†</span></td>` +
+    [t.en_cola, t.atendidos, t.derivados_tienda].map((v) => `<td>${fmt(v)}</td>`).join('') +
     [t.pct_ingreso_a_cola, t.pct_cola_a_atendido, t.pct_atendido_a_tienda, t.pct_conversion_global]
       .map((v) => `<td>${pct(v)}</td>`).join('') + '</tr>';
-  return `<div class="scroll-x"><table><thead><tr>${th}</tr></thead><tbody>${tb}</tbody><tfoot>${tf}</tfoot></table></div>`;
+  const notas = [];
+  if (dias.some((d) => d.provisional)) {
+    notas.push(`<strong>*</strong> Días con sesiones sin cerrar: provisionales, las tipificaciones todavía pueden cambiar.`);
+  }
+  notas.push(`<strong>†</strong> Personas únicas no es aditiva: el distinto del período es ${fmt(t.personas_unicas)}, la suma de la columna daría ${fmt(sumaUnicas)}. Quien escribe dos días cuenta una sola vez.`);
+  return `<div class="scroll-x"><table><thead><tr>${th}</tr></thead><tbody>${tb}</tbody><tfoot>${tf}</tfoot></table></div>`
+    + `<p class="nota">${notas.join('<br>')}</p>`;
+}
+
+/* Tabla de tiendas CON total: es la comprobación de que el corte por punto de
+ * venta cuadra con el embudo. Antes se contaban pares (sesión x tag) y daba de
+ * más; ahora cada derivación aporta a una sola tienda. */
+function tablaTiendas(lista, totalDerivados) {
+  const suma = lista.reduce((a, t) => a + t.derivaciones, 0);
+  const tb = lista.map((t) => {
+    const nom = t.tienda.replace(/^TDA/, '');
+    const p = pct(totalDerivados ? Math.round((t.derivaciones / totalDerivados) * 1000) / 10 : null);
+    return `<tr><td>${esc(nom)}</td><td>${fmt(t.derivaciones)}</td><td>${esc(p)}</td></tr>`;
+  }).join('');
+  const descuadre = suma !== totalDerivados
+    ? `<span class="prov" title="${esc('No cuadra con los ' + fmt(totalDerivados) + ' derivados del embudo')}"> ⚠</span>` : '';
+  const tf = `<tr><td>Total</td><td>${fmt(suma)}${descuadre}</td><td>${esc(pct(suma ? 100 : null))}</td></tr>`;
+  return `<div class="scroll-x"><table><thead><tr><th>Tienda</th><th>Derivaciones</th><th>% del total</th></tr></thead>`
+    + `<tbody>${tb}</tbody><tfoot>${tf}</tfoot></table></div>`;
 }
 
 /* --------------------------------------------------------------- render */
 let ultimo = null;
+let pestana = '__todos';
 
-function render(data) {
-  const t = data.totales, dias = data.por_dia, tiendas = data.por_tienda;
-  ultimo = data;
+function bloqueVacio(periodo) {
+  return `<div class="card"><h2>Sin datos</h2><p class="cap">No hubo sesiones entre ${esc(periodo.desde)} y ${esc(periodo.hasta)}.</p></div>`;
+}
+
+/* Cuerpo del reporte para un bloque de embudo: sirve igual para el total del
+ * período y para una pestaña de gestor, porque tienen la misma forma. */
+function cuerpo(b, periodo, gestor) {
+  const dias = b.por_dia || [], tiendas = b.por_tienda || [];
+  if (!b.ingresos) return bloqueVacio(periodo);
   const leyenda = SERIES.map((s) =>
     `<span><i class="dot" style="background:${s.color}"></i>${esc(s.nombre)}</span>`).join('');
+  const etiquetaIngresos = gestor ? 'Sesiones que trabajó' : 'Ingresaron al chat';
 
-  const sinDatos = !t.ingresos;
-  $('reporte').innerHTML = sinDatos
-    ? `<div class="card"><h2>Sin datos</h2><p class="cap">No hubo sesiones entre ${esc(data.periodo.desde)} y ${esc(data.periodo.hasta)}.</p></div>`
-    : `
+  return `
     <div class="card">
       <div class="hero-row">
         <div>
-          <div class="hero-num">${pct(t.pct_conversion_global)}</div>
+          <div class="hero-num">${pct(b.pct_conversion_global)}</div>
           <div class="hero-lab">Conversión global<br>de ingreso a derivación a tienda</div>
         </div>
         <div class="tiles">
-          <div><div class="tile-v">${fmt(t.ingresos)}</div><div class="tile-l">Ingresaron al chat</div></div>
-          <div><div class="tile-v">${fmt(t.personas_unicas)}</div><div class="tile-l">Personas únicas</div></div>
-          <div><div class="tile-v">${fmt(t.atendidos)}</div><div class="tile-l">Atendidos</div></div>
-          <div><div class="tile-v">${fmt(t.derivados_tienda)}</div><div class="tile-l">Derivados a tienda</div></div>
+          <div><div class="tile-v">${fmt(b.ingresos)}</div><div class="tile-l">${esc(etiquetaIngresos)}</div></div>
+          <div><div class="tile-v">${fmt(b.personas_unicas)}</div><div class="tile-l">Personas únicas</div></div>
+          <div><div class="tile-v">${fmt(b.atendidos)}</div><div class="tile-l">Atendidos</div></div>
+          <div><div class="tile-v">${fmt(b.derivados_tienda)}</div><div class="tile-l">Derivados a tienda</div></div>
         </div>
       </div>
-      <p class="cap" style="margin:20px 0 0">Del ${esc(data.periodo.desde)} al ${esc(data.periodo.hasta)}.</p>
+      <p class="cap" style="margin:20px 0 0">Del ${esc(periodo.desde)} al ${esc(periodo.hasta)}.${
+        gestor ? ` Sólo las sesiones atendidas por ${esc(gestor)}.` : ''}${
+        b.sin_cerrar ? ` ${fmt(b.sin_cerrar)} sesiones siguen abiertas.` : ''}</p>
     </div>
 
     <div class="card">
       <h2>Embudo por etapas</h2>
       <p class="cap">Cada etapa exige haber pasado la anterior; el porcentaje es sobre la etapa previa.</p>
-      <div class="chart">${svgEmbudo(t)}</div>
+      <div class="chart">${svgEmbudo(b)}</div>
     </div>
 
     <div class="card">
       <h2>Evolución diaria</h2>
-      <p class="cap">Sesiones por día en cada etapa.</p>
+      <p class="cap">Sesiones por día en cada etapa. Las derivaciones se cuentan el día en que cerró el chat, no el día en que entró.</p>
       <div class="legend">${leyenda}</div>
       <div class="chart">${svgDiario(dias)}</div>
     </div>
@@ -455,38 +503,103 @@ function render(data) {
     <div class="card">
       <h2>Detalle por día</h2>
       <p class="cap">Los mismos valores del gráfico, en tabla.</p>
-      ${tablaDiaria(dias, t)}
+      ${tablaDiaria(dias, b)}
       <button type="button" id="csv" style="margin-top:16px">Descargar CSV</button>
     </div>
 
     ${tiendas.length ? `<div class="card">
       <h2>Derivaciones por tienda</h2>
-      <p class="cap">A partir de los tags <code>TDA*</code> del chat.</p>
+      <p class="cap">Una tienda por derivación: el total cuadra con los ${fmt(b.derivados_tienda)} derivados del embudo.</p>
       <div class="chart">${svgTiendas(tiendas)}</div>
-    </div>` : ''}
-
-    <p class="foot">Datos de Botmaker · generado el ${new Date().toLocaleString('es-PE')}</p>`;
-
-  $('reporte').hidden = false;
-  conectarTips($('reporte'));
-  const btnCsv = $('csv');
-  if (btnCsv) btnCsv.addEventListener('click', descargarCsv);
+      ${tablaTiendas(tiendas, b.derivados_tienda)}
+    </div>` : ''}`;
 }
 
-function descargarCsv() {
-  if (!ultimo) return;
-  const cols = ['fecha', 'dia_semana', 'ingresos', 'personas_unicas', 'en_cola', 'atendidos',
-    'derivados_tienda', 'pct_ingreso_a_cola', 'pct_cola_a_atendido', 'pct_atendido_a_tienda',
-    'pct_conversion_global'];
-  const filas = [cols.join(','), ...ultimo.por_dia.map((d) => cols.map((c) => d[c] ?? '').join(','))];
-  const url = URL.createObjectURL(new Blob([filas.join('\n')], { type: 'text/csv;charset=utf-8' }));
+function barraPestanas(data) {
+  const ges = data.por_gestor || [];
+  if (!ges.length) return '';
+  const botones = [{ k: '__todos', lab: 'Todos', n: data.totales.atendidos }]
+    .concat(ges.map((g) => ({ k: g.gestor, lab: g.gestor, n: g.atendidos })))
+    .map((b) => `<button type="button" class="tab" data-gestor="${esc(b.k)}" `
+      + `aria-pressed="${b.k === pestana}">${esc(b.lab)} <span class="tabn">${fmt(b.n)}</span></button>`)
+    .join('');
+  return `<div class="card"><h2>Por gestor</h2>`
+    + `<p class="cap">Cada pestaña muestra sólo las sesiones que atendió esa persona. `
+    + `Los atendidos de todas las pestañas suman el total del período.</p>`
+    + `<div class="tabs">${botones}</div></div>`;
+}
+
+/* Sólo aparece en el archivo suelto, que es el único que tiene las sesiones
+ * crudas: es la vía para llevarle estos datos a un entorno sin salida de red
+ * hacia Botmaker (el pipeline de Python los lee con --crudo). */
+function tarjetaCrudo(data) {
+  if (!data.crudo) return '';
+  return `<div class="card">
+      <h2>Datos crudos</h2>
+      <p class="cap">Las ${fmt(data.crudo.total)} sesiones tal cual las devuelve la API, sin procesar.
+      Sirve para reprocesarlas con <code>--crudo</code> sin volver a consultar Botmaker.</p>
+      <button type="button" id="crudo">Descargar JSON crudo</button>
+    </div>`;
+}
+
+function descargarCrudo() {
+  if (!ultimo || !ultimo.crudo) return;
+  const url = URL.createObjectURL(
+    new Blob([JSON.stringify(ultimo.crudo)], { type: 'application/json;charset=utf-8' }));
   const a = document.createElement('a');
   a.href = url;
-  a.download = `embudo_${ultimo.periodo.desde}_a_${ultimo.periodo.hasta}.csv`;
+  a.download = `botmaker_crudo_${ultimo.periodo.desde}_a_${ultimo.periodo.hasta}.json`;
   a.click();
   URL.revokeObjectURL(url);
 }
 
+function pintar(data) {
+  const ges = (data.por_gestor || []).find((g) => g.gestor === pestana);
+  const bloque = ges || data.totales;
+  if (!ges) { bloque.por_dia = data.por_dia; bloque.por_tienda = data.por_tienda; }
+  $('cuerpo').innerHTML = cuerpo(bloque, data.periodo, ges ? ges.gestor : null);
+  conectarTips($('cuerpo'));
+  const btnCsv = $('csv');
+  if (btnCsv) btnCsv.addEventListener('click', descargarCsv);
+}
+
+function render(data) {
+  ultimo = data;
+  pestana = '__todos';
+  const sinDatos = !data.totales.ingresos;
+  $('reporte').innerHTML = sinDatos ? bloqueVacio(data.periodo)
+    : barraPestanas(data) + '<div id="cuerpo"></div>' + tarjetaCrudo(data)
+      + `<p class="foot">Datos de Botmaker · generado el ${new Date().toLocaleString('es-PE')}</p>`;
+  $('reporte').hidden = false;
+
+  if (sinDatos) return;
+  pintar(data);
+  const btnCrudo = $('crudo');
+  if (btnCrudo) btnCrudo.addEventListener('click', descargarCrudo);
+  $('reporte').querySelectorAll('.tab').forEach((b) => b.addEventListener('click', () => {
+    pestana = b.dataset.gestor;
+    $('reporte').querySelectorAll('.tab').forEach((o) =>
+      o.setAttribute('aria-pressed', String(o.dataset.gestor === pestana)));
+    pintar(ultimo);
+  }));
+}
+
+function descargarCsv() {
+  if (!ultimo) return;
+  const ges = (ultimo.por_gestor || []).find((g) => g.gestor === pestana);
+  const dias = ges ? ges.por_dia : ultimo.por_dia;
+  const cols = ['fecha', 'dia_semana', 'ingresos', 'personas_unicas', 'en_cola', 'atendidos',
+    'derivados_tienda', 'sin_cerrar', 'provisional', 'pct_ingreso_a_cola', 'pct_cola_a_atendido',
+    'pct_atendido_a_tienda', 'pct_conversion_global'];
+  const filas = [cols.join(','), ...dias.map((d) => cols.map((c) => d[c] ?? '').join(','))];
+  const url = URL.createObjectURL(new Blob([filas.join('\n')], { type: 'text/csv;charset=utf-8' }));
+  const a = document.createElement('a');
+  const suf = ges ? '_' + ges.gestor.replace(/[^\w]+/g, '-') : '';
+  a.href = url;
+  a.download = `embudo_${ultimo.periodo.desde}_a_${ultimo.periodo.hasta}${suf}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
 
 </script>
 <script>
@@ -502,8 +615,21 @@ const BM_BASE = 'https://api.botmaker.com/v2.0';
 const OFFSET = -5;                       // Lima, UTC-5
 const DIAS_SIN_LONG_TERM = 7;            // más allá, Botmaker exige long-term-search
 const TIPIFICACIONES_DERIVACION = new Set(['Lead_Calificado', 'CORPORATIVO-LEAD-DERIVADO']);
-const TAGS_DERIVACION = new Set(['DERIVADOS']);
 const PREFIJO_TIENDA = 'TDA';
+const SIN_TIENDA = '(sin tienda identificada)';
+const SIN_GESTOR = '(sin gestor identificado)';
+const EVENTO_COLA = 'queue-set';
+const EVENTO_ASIGNACION = 'assigned-to-agent';
+const EVENTO_CIERRE = 'conversation-close';
+/* Botmaker no documenta con qué nombre viaja el operador dentro de info. */
+const CLAVES_OPERADOR = ['operatorName', 'operator', 'agentName', 'agent',
+  'userName', 'user', 'closedBy', 'by', 'email'];
+const CLAVES_AGENTE = ['agentName', 'agent', 'operatorName', 'operator',
+  'userName', 'user', 'assignedTo', 'to', 'email'];
+const CLAVES_TIMESTAMP = ['creationTime', 'time', 'timestamp', 'date'];
+/* Métricas que NO se pueden sumar entre días: una persona que escribe dos días
+ * cuenta una vez por día y una sola vez en el período. */
+const CAMPOS_NO_ADITIVOS = ['personas_unicas'];
 const REINTENTOS = new Set([429, 500, 502, 503, 504]);
 
 const dormir = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -568,68 +694,214 @@ async function traerSesiones(desde, hasta, token, avisar) {
   return items;
 }
 
-/* --- mismo cálculo que funnel.py: etapas anidadas --- */
+/* --- mismo cálculo que funnel.py: etapas anidadas ---
+ *
+ * Cada señal sale de la propia sesión, nunca del estado actual del chat:
+ * chat.tags y chat.variables describen el chat HOY y vienen repetidos en todas
+ * las sesiones del mismo contacto, así que contaminan semanas anteriores.
+ *   · derivación -> evento conversation-close, info.typification
+ *   · cola       -> evento queue-set, info.queue  (chat.queueId no existe en
+ *                   GET /sessions: leerlo dejaba la columna siempre vacía)
+ * Los tags sólo se usan para atribuir la tienda TDA*.
+ */
+function marcaEvento(e) {
+  for (const k of CLAVES_TIMESTAMP) if (typeof e[k] === 'string' && e[k]) return e[k];
+  return '';
+}
+
+function eventosPorNombre(s) {
+  const mapa = new Map();
+  for (const e of s.events || []) {
+    if (!e || typeof e !== 'object') continue;
+    const n = e.name || '';
+    if (!mapa.has(n)) mapa.set(n, []);
+    mapa.get(n).push(e);
+  }
+  // Los eventos no siempre llegan ordenados y nos interesa el último.
+  for (const g of mapa.values()) g.sort((a, b) => marcaEvento(a).localeCompare(marcaEvento(b)));
+  return mapa;
+}
+
+/* info del último evento con ese nombre: una conversación puede re-encolarse o
+ * cerrarse más de una vez, y lo que describe el desenlace es el último. */
+function infoUltimo(eventos, nombre) {
+  const g = eventos.get(nombre);
+  if (!g || !g.length) return {};
+  const info = g[g.length - 1].info;
+  return info && typeof info === 'object' ? info : {};
+}
+
+function texto(v) { return typeof v === 'string' && v.trim() ? v.trim() : null; }
+
+function persona(info, claves) {
+  for (const k of claves) { const v = texto(info[k]); if (v) return v; }
+  return null;
+}
+
+function aFechaLocal(iso) {
+  const t = Date.parse(iso);
+  if (Number.isNaN(t)) return null;
+  return new Date(t + OFFSET * 3600000).toISOString().slice(0, 10);
+}
+
+function fechaEvento(eventos, nombre) {
+  const g = eventos.get(nombre);
+  if (!g || !g.length) return null;
+  const marca = marcaEvento(g[g.length - 1]);
+  return marca ? aFechaLocal(marca) : null;
+}
+
 function sesionAFila(s) {
   const chat = s.chat || {};
   const ref = chat.chat || {};
-  const eventos = new Set((s.events || []).map((e) => e.name));
+  const eventos = eventosPorNombre(s);
   const tags = new Set(chat.tags || []);
-  const tip = (chat.variables || {}).typification;
+  const fechaLocal = aFechaLocal(s.creationTime);
+
+  const cola = texto(infoUltimo(eventos, EVENTO_COLA).queue);
+  const infoCierre = infoUltimo(eventos, EVENTO_CIERRE);
+  const tip = texto(infoCierre.typification);
+  const operador = persona(infoCierre, CLAVES_OPERADOR);
+  const agente = persona(infoUltimo(eventos, EVENTO_ASIGNACION), CLAVES_AGENTE);
+
+  const cerrado = eventos.has(EVENTO_CIERRE);
+  const asignado = eventos.has(EVENTO_ASIGNACION);
+  // Criterio B: un operador que cierra la conversación la trabajó, aunque el
+  // chat nunca se le asignara formalmente.
+  const cerradoPorOperador = Boolean(operador);
+  const enCola = eventos.has(EVENTO_COLA) || asignado;
+  const atendido = enCola && (asignado || cerradoPorOperador);
+  const derivado = atendido && TIPIFICACIONES_DERIVACION.has(tip);
+
+  // Una sola tienda por derivación: así el corte por tienda suma igual que el
+  // total de derivados. Contar pares (sesión x tag) lo inflaba.
   const tiendas = [...tags].filter((t) => t.startsWith(PREFIJO_TIENDA)).sort();
+  const tienda = derivado ? (tiendas[0] || SIN_TIENDA) : null;
 
-  const utc = new Date(s.creationTime);
-  const local = new Date(utc.getTime() + OFFSET * 3600000);
-  const fechaLocal = local.toISOString().slice(0, 10);
+  // La derivación se imputa al día del CIERRE, que es cuando el gestor tipifica.
+  const fechaCierre = fechaEvento(eventos, EVENTO_CIERRE);
+  const fechaDerivacion = derivado ? (fechaCierre || fechaLocal) : null;
+  let gestor = operador || agente;
+  if (atendido && !gestor) gestor = SIN_GESTOR;
 
-  const enCola = eventos.has('queue-set') || eventos.has('assigned-to-agent');
-  const atendido = enCola && eventos.has('assigned-to-agent');
-  const derivado = atendido && (TIPIFICACIONES_DERIVACION.has(tip) ||
-    [...tags].some((t) => TAGS_DERIVACION.has(t)) || tiendas.length > 0);
-
-  return { id: s.id, chatId: ref.chatId || '', fechaLocal, enCola, atendido, derivado, tiendas };
+  return {
+    id: s.id, chatId: ref.chatId || '', fechaLocal, fechaCierre, fechaDerivacion,
+    cola, tipificacion: tip, operador, agente, gestor, tienda, tiendas,
+    enCola, asignado, cerradoPorOperador, atendido, derivado, cerrado,
+  };
 }
 
 function pctSeguro(a, b) { return b ? Math.round((a / b) * 1000) / 10 : null; }
 
-function agregar(filas, desde, hasta) {
-  const porDia = new Map();
-  for (const f of filas) {
-    if (!porDia.has(f.fechaLocal)) porDia.set(f.fechaLocal, []);
-    porDia.get(f.fechaLocal).push(f);
-  }
-  const dias = [...porDia.keys()].sort().map((fecha) => {
-    const g = porDia.get(fecha);
-    const ing = g.length;
-    const cola = g.filter((f) => f.enCola).length;
-    const at = g.filter((f) => f.atendido).length;
-    const der = g.filter((f) => f.derivado).length;
-    return {
-      fecha,
-      dia_semana: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][new Date(fecha + 'T12:00:00Z').getUTCDay()],
-      ingresos: ing, personas_unicas: new Set(g.map((f) => f.chatId)).size,
-      en_cola: cola, atendidos: at, derivados_tienda: der,
-      pct_ingreso_a_cola: pctSeguro(cola, ing), pct_cola_a_atendido: pctSeguro(at, cola),
-      pct_atendido_a_tienda: pctSeguro(der, at), pct_conversion_global: pctSeguro(der, ing),
-    };
-  });
-
+/* Bloque de embudo. `derivados` se fuerza en el corte diario, donde las
+ * derivaciones no son las de las sesiones que entraron ese día sino las que
+ * cerraron. */
+function bloqueEmbudo(filas, derivados) {
   const ing = filas.length;
   const cola = filas.filter((f) => f.enCola).length;
   const at = filas.filter((f) => f.atendido).length;
-  const der = filas.filter((f) => f.derivado).length;
-  const totales = {
-    ingresos: ing, personas_unicas: new Set(filas.map((f) => f.chatId)).size,
-    en_cola: cola, atendidos: at, derivados_tienda: der,
+  // De los chats que ENTRARON en este grupo, cuántos terminaron derivando, sin
+  // importar qué día cerraron. Es la única cifra que comparte población con
+  // ingresos/cola/atendidos, así que es la que da porcentajes legibles.
+  const cohorte = filas.filter((f) => f.derivado).length;
+  const der = derivados === undefined ? cohorte : derivados;
+  return {
+    ingresos: ing,
+    personas_unicas: new Set(filas.map((f) => f.chatId).filter(Boolean)).size,
+    en_cola: cola, atendidos: at,
+    // Imputadas al día del CIERRE: "cuánto derivamos ese día" (operativo).
+    derivados_tienda: der,
+    // Imputadas al día de INGRESO: "de lo que entró ese día, cuánto derivó"
+    // (conversión). En el total del período las dos coinciden.
+    derivados_cohorte: cohorte,
+    sin_cerrar: filas.filter((f) => !f.cerrado).length,
     pct_ingreso_a_cola: pctSeguro(cola, ing), pct_cola_a_atendido: pctSeguro(at, cola),
-    pct_atendido_a_tienda: pctSeguro(der, at), pct_conversion_global: pctSeguro(der, ing),
+    // Sobre la cohorte, no sobre los cierres del día: dividir derivaciones de
+    // otros días por los atendidos de éste daba porcentajes de más de 100%.
+    pct_atendido_a_tienda: pctSeguro(cohorte, at), pct_conversion_global: pctSeguro(cohorte, ing),
   };
+}
 
+function derivacionesPorDia(filas) {
+  const m = new Map();
+  for (const f of filas) {
+    if (f.derivado && f.fechaDerivacion) m.set(f.fechaDerivacion, (m.get(f.fechaDerivacion) || 0) + 1);
+  }
+  return m;
+}
+
+/* Una fila por tienda, contando DERIVACIONES. La suma es exactamente
+ * derivados_tienda del total. */
+function porTienda(filas) {
   const conteo = new Map();
-  for (const f of filas) for (const t of f.tiendas) conteo.set(t, (conteo.get(t) || 0) + 1);
-  const porTienda = [...conteo.entries()].sort((a, b) => b[1] - a[1])
+  for (const f of filas) {
+    if (!f.derivado) continue;
+    const k = f.tienda || SIN_TIENDA;
+    conteo.set(k, (conteo.get(k) || 0) + 1);
+  }
+  return [...conteo.entries()]
+    .sort((a, b) => (a[0] === SIN_TIENDA) - (b[0] === SIN_TIENDA)
+      || b[1] - a[1] || a[0].localeCompare(b[0]))
     .map(([tienda, derivaciones]) => ({ tienda, derivaciones }));
+}
 
-  return { periodo: { desde, hasta }, totales, por_dia: dias, por_tienda: porTienda };
+function porDia(filas) {
+  const grupos = new Map();
+  for (const f of filas) {
+    if (!grupos.has(f.fechaLocal)) grupos.set(f.fechaLocal, []);
+    grupos.get(f.fechaLocal).push(f);
+  }
+  const derivs = derivacionesPorDia(filas);
+  const fechas = [...new Set([...grupos.keys(), ...derivs.keys()])].filter(Boolean).sort();
+  return fechas.map((fecha) => {
+    const g = grupos.get(fecha) || [];
+    const fila = {
+      fecha,
+      dia_semana: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][new Date(fecha + 'T12:00:00Z').getUTCDay()],
+      ...bloqueEmbudo(g, derivs.get(fecha) || 0),
+    };
+    fila.provisional = fila.sin_cerrar > 0;
+    return fila;
+  });
+}
+
+/* Sólo sesiones ATENDIDAS: un chat que murió en el bot no tiene gestor a quien
+ * atribuírselo. */
+function porGestor(filas) {
+  const grupos = new Map();
+  for (const f of filas) {
+    if (!f.atendido) continue;
+    const k = f.gestor || SIN_GESTOR;
+    if (!grupos.has(k)) grupos.set(k, []);
+    grupos.get(k).push(f);
+  }
+  return [...grupos.entries()]
+    .map(([gestor, g]) => ({
+      gestor, ...bloqueEmbudo(g), por_tienda: porTienda(g), por_dia: porDia(g),
+    }))
+    .sort((a, b) => (a.gestor === SIN_GESTOR) - (b.gestor === SIN_GESTOR)
+      || b.atendidos - a.atendidos || a.gestor.localeCompare(b.gestor));
+}
+
+function agregar(filas, desde, hasta) {
+  const totales = bloqueEmbudo(filas);
+  totales.campos_no_aditivos = CAMPOS_NO_ADITIVOS;
+  totales.criterio_atendido = 'B';   // asignado o cerrado por un operador
+  totales.asignados = filas.filter((f) => f.asignado).length;
+  // Cuántas derivaciones cerraron un día distinto al del ingreso: es la
+  // magnitud del desfase entre las dos lecturas de la tabla diaria.
+  totales.derivaciones_diferidas =
+    filas.filter((f) => f.derivado && f.fechaDerivacion !== f.fechaLocal).length;
+  totales.cerrados_por_operador_sin_asignar =
+    filas.filter((f) => f.cerradoPorOperador && !f.asignado).length;
+
+  return {
+    periodo: { desde, hasta },
+    totales,
+    por_dia: porDia(filas),
+    por_tienda: porTienda(filas),
+    por_gestor: porGestor(filas),
+  };
 }
 
 async function obtenerDatos({ desde, hasta, token, avisar }) {
@@ -638,9 +910,16 @@ async function obtenerDatos({ desde, hasta, token, avisar }) {
   const sesiones = await traerSesiones(desde, hasta, token, avisar);
   // Las ventanas solapadas pueden repetir sesiones: deduplicamos por id.
   const vistas = new Map();
-  for (const s of sesiones) { const f = sesionAFila(s); vistas.set(f.id, f); }
+  const crudas = new Map();
+  for (const s of sesiones) { const f = sesionAFila(s); vistas.set(f.id, f); crudas.set(s.id, s); }
   const filas = [...vistas.values()].filter((f) => f.fechaLocal >= desde && f.fechaLocal <= hasta);
-  return agregar(filas, desde, hasta);
+  const datos = agregar(filas, desde, hasta);
+  // El JSON crudo queda disponible para descargar: es la única vía de pasarle
+  // estos datos a un entorno que no tenga salida de red hacia Botmaker.
+  const vivas = new Set(filas.map((f) => f.id));
+  const items = [...crudas.values()].filter((s) => vivas.has(s.id));
+  datos.crudo = { desde, hasta, total: items.length, items };
+  return datos;
 }
 
 </script>

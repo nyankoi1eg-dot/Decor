@@ -194,52 +194,92 @@ function tablaDiaria(dias, t) {
     ['% Global', (d) => pct(d.pct_conversion_global)],
   ];
   const th = cols.map((c) => `<th>${esc(c[0])}</th>`).join('');
-  const tb = dias.map((d) => '<tr>' + cols.map((c) => `<td>${esc(c[1](d))}</td>`).join('') + '</tr>').join('');
+  const tb = dias.map((d) => {
+    // Un día con sesiones abiertas todavía puede cambiar: se marca provisional.
+    const marca = d.provisional ? `<span class="prov" title="${esc(fmt(d.sin_cerrar) + ' sesiones sin cerrar: la cifra puede cambiar')}">*</span>` : '';
+    return '<tr>' + cols.map((c, i) =>
+      `<td>${esc(c[1](d))}${i === 0 ? marca : ''}</td>`).join('') + '</tr>';
+  }).join('');
+  // personas_unicas NO se totaliza: sumar la columna cuenta dos veces a quien
+  // escribe dos días. Se muestra el distinct del período, marcado.
+  const sumaUnicas = dias.reduce((a, d) => a + d.personas_unicas, 0);
   const tf = '<tr><td>Total</td><td></td>' +
-    [t.ingresos, t.personas_unicas, t.en_cola, t.atendidos, t.derivados_tienda].map((v) => `<td>${fmt(v)}</td>`).join('') +
+    `<td>${fmt(t.ingresos)}</td>` +
+    `<td class="noadit" title="${esc('Distinto del período. No es la suma de la columna (' + fmt(sumaUnicas) + ').')}">${fmt(t.personas_unicas)}<span class="prov">†</span></td>` +
+    [t.en_cola, t.atendidos, t.derivados_tienda].map((v) => `<td>${fmt(v)}</td>`).join('') +
     [t.pct_ingreso_a_cola, t.pct_cola_a_atendido, t.pct_atendido_a_tienda, t.pct_conversion_global]
       .map((v) => `<td>${pct(v)}</td>`).join('') + '</tr>';
-  return `<div class="scroll-x"><table><thead><tr>${th}</tr></thead><tbody>${tb}</tbody><tfoot>${tf}</tfoot></table></div>`;
+  const notas = [];
+  if (dias.some((d) => d.provisional)) {
+    notas.push(`<strong>*</strong> Días con sesiones sin cerrar: provisionales, las tipificaciones todavía pueden cambiar.`);
+  }
+  notas.push(`<strong>†</strong> Personas únicas no es aditiva: el distinto del período es ${fmt(t.personas_unicas)}, la suma de la columna daría ${fmt(sumaUnicas)}. Quien escribe dos días cuenta una sola vez.`);
+  return `<div class="scroll-x"><table><thead><tr>${th}</tr></thead><tbody>${tb}</tbody><tfoot>${tf}</tfoot></table></div>`
+    + `<p class="nota">${notas.join('<br>')}</p>`;
+}
+
+/* Tabla de tiendas CON total: es la comprobación de que el corte por punto de
+ * venta cuadra con el embudo. Antes se contaban pares (sesión x tag) y daba de
+ * más; ahora cada derivación aporta a una sola tienda. */
+function tablaTiendas(lista, totalDerivados) {
+  const suma = lista.reduce((a, t) => a + t.derivaciones, 0);
+  const tb = lista.map((t) => {
+    const nom = t.tienda.replace(/^TDA/, '');
+    const p = pct(totalDerivados ? Math.round((t.derivaciones / totalDerivados) * 1000) / 10 : null);
+    return `<tr><td>${esc(nom)}</td><td>${fmt(t.derivaciones)}</td><td>${esc(p)}</td></tr>`;
+  }).join('');
+  const descuadre = suma !== totalDerivados
+    ? `<span class="prov" title="${esc('No cuadra con los ' + fmt(totalDerivados) + ' derivados del embudo')}"> ⚠</span>` : '';
+  const tf = `<tr><td>Total</td><td>${fmt(suma)}${descuadre}</td><td>${esc(pct(suma ? 100 : null))}</td></tr>`;
+  return `<div class="scroll-x"><table><thead><tr><th>Tienda</th><th>Derivaciones</th><th>% del total</th></tr></thead>`
+    + `<tbody>${tb}</tbody><tfoot>${tf}</tfoot></table></div>`;
 }
 
 /* --------------------------------------------------------------- render */
 let ultimo = null;
+let pestana = '__todos';
 
-function render(data) {
-  const t = data.totales, dias = data.por_dia, tiendas = data.por_tienda;
-  ultimo = data;
+function bloqueVacio(periodo) {
+  return `<div class="card"><h2>Sin datos</h2><p class="cap">No hubo sesiones entre ${esc(periodo.desde)} y ${esc(periodo.hasta)}.</p></div>`;
+}
+
+/* Cuerpo del reporte para un bloque de embudo: sirve igual para el total del
+ * período y para una pestaña de gestor, porque tienen la misma forma. */
+function cuerpo(b, periodo, gestor) {
+  const dias = b.por_dia || [], tiendas = b.por_tienda || [];
+  if (!b.ingresos) return bloqueVacio(periodo);
   const leyenda = SERIES.map((s) =>
     `<span><i class="dot" style="background:${s.color}"></i>${esc(s.nombre)}</span>`).join('');
+  const etiquetaIngresos = gestor ? 'Sesiones que trabajó' : 'Ingresaron al chat';
 
-  const sinDatos = !t.ingresos;
-  $('reporte').innerHTML = sinDatos
-    ? `<div class="card"><h2>Sin datos</h2><p class="cap">No hubo sesiones entre ${esc(data.periodo.desde)} y ${esc(data.periodo.hasta)}.</p></div>`
-    : `
+  return `
     <div class="card">
       <div class="hero-row">
         <div>
-          <div class="hero-num">${pct(t.pct_conversion_global)}</div>
+          <div class="hero-num">${pct(b.pct_conversion_global)}</div>
           <div class="hero-lab">Conversión global<br>de ingreso a derivación a tienda</div>
         </div>
         <div class="tiles">
-          <div><div class="tile-v">${fmt(t.ingresos)}</div><div class="tile-l">Ingresaron al chat</div></div>
-          <div><div class="tile-v">${fmt(t.personas_unicas)}</div><div class="tile-l">Personas únicas</div></div>
-          <div><div class="tile-v">${fmt(t.atendidos)}</div><div class="tile-l">Atendidos</div></div>
-          <div><div class="tile-v">${fmt(t.derivados_tienda)}</div><div class="tile-l">Derivados a tienda</div></div>
+          <div><div class="tile-v">${fmt(b.ingresos)}</div><div class="tile-l">${esc(etiquetaIngresos)}</div></div>
+          <div><div class="tile-v">${fmt(b.personas_unicas)}</div><div class="tile-l">Personas únicas</div></div>
+          <div><div class="tile-v">${fmt(b.atendidos)}</div><div class="tile-l">Atendidos</div></div>
+          <div><div class="tile-v">${fmt(b.derivados_tienda)}</div><div class="tile-l">Derivados a tienda</div></div>
         </div>
       </div>
-      <p class="cap" style="margin:20px 0 0">Del ${esc(data.periodo.desde)} al ${esc(data.periodo.hasta)}.</p>
+      <p class="cap" style="margin:20px 0 0">Del ${esc(periodo.desde)} al ${esc(periodo.hasta)}.${
+        gestor ? ` Sólo las sesiones atendidas por ${esc(gestor)}.` : ''}${
+        b.sin_cerrar ? ` ${fmt(b.sin_cerrar)} sesiones siguen abiertas.` : ''}</p>
     </div>
 
     <div class="card">
       <h2>Embudo por etapas</h2>
       <p class="cap">Cada etapa exige haber pasado la anterior; el porcentaje es sobre la etapa previa.</p>
-      <div class="chart">${svgEmbudo(t)}</div>
+      <div class="chart">${svgEmbudo(b)}</div>
     </div>
 
     <div class="card">
       <h2>Evolución diaria</h2>
-      <p class="cap">Sesiones por día en cada etapa.</p>
+      <p class="cap">Sesiones por día en cada etapa. Las derivaciones se cuentan el día en que cerró el chat, no el día en que entró.</p>
       <div class="legend">${leyenda}</div>
       <div class="chart">${svgDiario(dias)}</div>
     </div>
@@ -247,35 +287,100 @@ function render(data) {
     <div class="card">
       <h2>Detalle por día</h2>
       <p class="cap">Los mismos valores del gráfico, en tabla.</p>
-      ${tablaDiaria(dias, t)}
+      ${tablaDiaria(dias, b)}
       <button type="button" id="csv" style="margin-top:16px">Descargar CSV</button>
     </div>
 
     ${tiendas.length ? `<div class="card">
       <h2>Derivaciones por tienda</h2>
-      <p class="cap">A partir de los tags <code>TDA*</code> del chat.</p>
+      <p class="cap">Una tienda por derivación: el total cuadra con los ${fmt(b.derivados_tienda)} derivados del embudo.</p>
       <div class="chart">${svgTiendas(tiendas)}</div>
-    </div>` : ''}
-
-    <p class="foot">Datos de Botmaker · generado el ${new Date().toLocaleString('es-PE')}</p>`;
-
-  $('reporte').hidden = false;
-  conectarTips($('reporte'));
-  const btnCsv = $('csv');
-  if (btnCsv) btnCsv.addEventListener('click', descargarCsv);
+      ${tablaTiendas(tiendas, b.derivados_tienda)}
+    </div>` : ''}`;
 }
 
-function descargarCsv() {
-  if (!ultimo) return;
-  const cols = ['fecha', 'dia_semana', 'ingresos', 'personas_unicas', 'en_cola', 'atendidos',
-    'derivados_tienda', 'pct_ingreso_a_cola', 'pct_cola_a_atendido', 'pct_atendido_a_tienda',
-    'pct_conversion_global'];
-  const filas = [cols.join(','), ...ultimo.por_dia.map((d) => cols.map((c) => d[c] ?? '').join(','))];
-  const url = URL.createObjectURL(new Blob([filas.join('\n')], { type: 'text/csv;charset=utf-8' }));
+function barraPestanas(data) {
+  const ges = data.por_gestor || [];
+  if (!ges.length) return '';
+  const botones = [{ k: '__todos', lab: 'Todos', n: data.totales.atendidos }]
+    .concat(ges.map((g) => ({ k: g.gestor, lab: g.gestor, n: g.atendidos })))
+    .map((b) => `<button type="button" class="tab" data-gestor="${esc(b.k)}" `
+      + `aria-pressed="${b.k === pestana}">${esc(b.lab)} <span class="tabn">${fmt(b.n)}</span></button>`)
+    .join('');
+  return `<div class="card"><h2>Por gestor</h2>`
+    + `<p class="cap">Cada pestaña muestra sólo las sesiones que atendió esa persona. `
+    + `Los atendidos de todas las pestañas suman el total del período.</p>`
+    + `<div class="tabs">${botones}</div></div>`;
+}
+
+/* Sólo aparece en el archivo suelto, que es el único que tiene las sesiones
+ * crudas: es la vía para llevarle estos datos a un entorno sin salida de red
+ * hacia Botmaker (el pipeline de Python los lee con --crudo). */
+function tarjetaCrudo(data) {
+  if (!data.crudo) return '';
+  return `<div class="card">
+      <h2>Datos crudos</h2>
+      <p class="cap">Las ${fmt(data.crudo.total)} sesiones tal cual las devuelve la API, sin procesar.
+      Sirve para reprocesarlas con <code>--crudo</code> sin volver a consultar Botmaker.</p>
+      <button type="button" id="crudo">Descargar JSON crudo</button>
+    </div>`;
+}
+
+function descargarCrudo() {
+  if (!ultimo || !ultimo.crudo) return;
+  const url = URL.createObjectURL(
+    new Blob([JSON.stringify(ultimo.crudo)], { type: 'application/json;charset=utf-8' }));
   const a = document.createElement('a');
   a.href = url;
-  a.download = `embudo_${ultimo.periodo.desde}_a_${ultimo.periodo.hasta}.csv`;
+  a.download = `botmaker_crudo_${ultimo.periodo.desde}_a_${ultimo.periodo.hasta}.json`;
   a.click();
   URL.revokeObjectURL(url);
 }
 
+function pintar(data) {
+  const ges = (data.por_gestor || []).find((g) => g.gestor === pestana);
+  const bloque = ges || data.totales;
+  if (!ges) { bloque.por_dia = data.por_dia; bloque.por_tienda = data.por_tienda; }
+  $('cuerpo').innerHTML = cuerpo(bloque, data.periodo, ges ? ges.gestor : null);
+  conectarTips($('cuerpo'));
+  const btnCsv = $('csv');
+  if (btnCsv) btnCsv.addEventListener('click', descargarCsv);
+}
+
+function render(data) {
+  ultimo = data;
+  pestana = '__todos';
+  const sinDatos = !data.totales.ingresos;
+  $('reporte').innerHTML = sinDatos ? bloqueVacio(data.periodo)
+    : barraPestanas(data) + '<div id="cuerpo"></div>' + tarjetaCrudo(data)
+      + `<p class="foot">Datos de Botmaker · generado el ${new Date().toLocaleString('es-PE')}</p>`;
+  $('reporte').hidden = false;
+
+  if (sinDatos) return;
+  pintar(data);
+  const btnCrudo = $('crudo');
+  if (btnCrudo) btnCrudo.addEventListener('click', descargarCrudo);
+  $('reporte').querySelectorAll('.tab').forEach((b) => b.addEventListener('click', () => {
+    pestana = b.dataset.gestor;
+    $('reporte').querySelectorAll('.tab').forEach((o) =>
+      o.setAttribute('aria-pressed', String(o.dataset.gestor === pestana)));
+    pintar(ultimo);
+  }));
+}
+
+function descargarCsv() {
+  if (!ultimo) return;
+  const ges = (ultimo.por_gestor || []).find((g) => g.gestor === pestana);
+  const dias = ges ? ges.por_dia : ultimo.por_dia;
+  const cols = ['fecha', 'dia_semana', 'ingresos', 'personas_unicas', 'en_cola', 'atendidos',
+    'derivados_tienda', 'sin_cerrar', 'provisional', 'pct_ingreso_a_cola', 'pct_cola_a_atendido',
+    'pct_atendido_a_tienda', 'pct_conversion_global'];
+  const filas = [cols.join(','), ...dias.map((d) => cols.map((c) => d[c] ?? '').join(','))];
+  const url = URL.createObjectURL(new Blob([filas.join('\n')], { type: 'text/csv;charset=utf-8' }));
+  const a = document.createElement('a');
+  const suf = ges ? '_' + ges.gestor.replace(/[^\w]+/g, '-') : '';
+  a.href = url;
+  a.download = `embudo_${ultimo.periodo.desde}_a_${ultimo.periodo.hasta}${suf}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
